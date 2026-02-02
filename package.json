@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@upstash/context7-mcp": "^2.1.1",
+    "superpowers": "^0.0.2"
+  }
+}
