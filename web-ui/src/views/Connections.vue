@@ -21,7 +21,16 @@
           </el-link>
         </template>
       </el-table-column>
-      <el-table-column prop="proxy_key" label="Proxy Key" min-width="180" show-overflow-tooltip />
+      <el-table-column label="Proxy Key" min-width="200">
+        <template #default="{ row }">
+          <el-link 
+            type="success" 
+            @click="copyToClipboard(row.proxy_key)"
+          >
+            <span class="proxy-key">{{ row.proxy_key }}</span>
+          </el-link>
+        </template>
+      </el-table-column>
       <el-table-column label="小模型" width="120">
         <template #default="{ row }">
           <el-tag size="small" type="info">{{ row.small_model?.name || '-' }}</el-tag>
@@ -474,6 +483,12 @@ onMounted(() => {
   font-family: monospace;
   font-size: 12px;
   color: #409eff;
+}
+
+.proxy-key {
+  font-family: monospace;
+  font-size: 12px;
+  color: #67c23a;
 }
 
 .form-tip {
