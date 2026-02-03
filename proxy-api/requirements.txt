@@ -1,0 +1,49 @@
+# TW AI 节能器 - Python 依赖 (Windows 兼容版本)
+
+# Web 框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# 数据处理 - 使用兼容版本
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# 数据库 - 使用预编译 wheel
+motor==3.3.2
+
+# 向量数据库 - 使用预编译 wheel
+qdrant-client==1.9.0
+
+# HTTP 客户端
+httpx==0.26.0
+
+# 配置和日志
+pyyaml==6.0.1
+python-dotenv==1.0.0
+loguru==0.7.2
+
+# 安全
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# 异步支持
+aiofiles==23.2.1
+anyio==4.2.0
+
+# 重试机制
+tenacity==8.2.3
+
+# 测试框架 - 核心依赖
+pytest>=7.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# 覆盖率
+coverage>=7.0.0
+
+# 开发和质量
+ruff>=0.1.0
+black>=23.0.0
+isort>=5.12.0

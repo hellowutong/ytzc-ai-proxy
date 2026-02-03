@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: tw-ai-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: tw_ai_proxy
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - tw-ai-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    container_name: tw-ai-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    environment:
+      QDRANT__SERVICE__API_GRPC_PORT: 6334
+      QDRANT__SERVICE__HTTP_PORT: 6333
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - tw-ai-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: tw-ai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - tw-ai-network
+
+volumes:
+  mongodb_data:
+  qdrant_data:
+  redis_data:
+
+networks:
+  tw-ai-network:
+    driver: bridge

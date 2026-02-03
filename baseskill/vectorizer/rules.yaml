@@ -1,0 +1,68 @@
+generation:
+  version_start: 0
+  status: "draft"
+
+trigger:
+  - "manual"
+  - "auto"
+
+output:
+  format: "yaml"
+  status: "draft"
+
+quality_check:
+  enabled: true
+  score_threshold: 0.7
+
+vectorization:
+  chunk_size: 1000
+  chunk_overlap: 200
+  separators:
+    - "\n\n"
+    - "\n"
+    - "。"
+    - "！"
+    - "？"
+    - "；"
+  encoding: "utf-8"
+  min_chunk_length: 50
+  max_chunk_length: 2000
+
+embedding:
+  models:
+    - "BAAI/bge-large-zh"
+    - "BAAI/bge-base-zh"
+    - "shibing624/text2vec-base-chinese"
+    - "GanymedeNil/text2vec-large-chinese"
+  default_model: "BAAI/bge-large-zh"
+  dimensions: 1024
+  batch_size: 32
+
+metadata:
+  preserve:
+    - document_id
+    - source_url
+    - title
+    - author
+    - created_at
+    - updated_at
+  extract:
+    - keywords
+    - entities
+    - summary
+  schema:
+    document_id: "string"
+    source_url: "string"
+    title: "string"
+    author: "string"
+    created_at: "datetime"
+    updated_at: "datetime"
+    chunk_index: "integer"
+    page_number: "integer"
+    keywords: "list[string]"
+
+quality_metrics:
+  semantic_coherence: true
+  coverage_ratio: true
+  keyword_extraction: true
+  vector_normalization: true

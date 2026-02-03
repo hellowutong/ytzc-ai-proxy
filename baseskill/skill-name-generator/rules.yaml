@@ -1,0 +1,91 @@
+generation:
+  version_start: 0
+  status: "draft"
+
+trigger:
+  - "manual"
+  - "auto"
+
+output:
+  format: "yaml"
+  status: "draft"
+
+quality_check:
+  enabled: true
+  score_threshold: 0.7
+
+naming:
+  max_suggestions: 4
+  min_confidence: 0.7
+  preferred_language: "zh"
+  styles:
+    - "formal"
+    - "technical"
+    - "concise"
+
+categories:
+  - "generator"
+  - "processor"
+  - "analyzer"
+  - "tool"
+  - "workflow"
+  - "helper"
+  - "integration"
+
+tags:
+  functional:
+    - "generator"
+    - "processor"
+    - "analyzer"
+    - "tool"
+    - "workflow"
+    - "helper"
+    - "integration"
+  domain:
+    - "text"
+    - "code"
+    - "data"
+    - "image"
+    - "audio"
+    - "video"
+    - "multimedia"
+  tech:
+    - "python"
+    - "javascript"
+    - "typescript"
+    - "go"
+    - "rust"
+    - "java"
+    - "cpp"
+  complexity:
+    - "simple"
+    - "medium"
+    - "complex"
+
+identifier_rules:
+  min_length: 3
+  max_length: 64
+  pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+  reserved:
+    - "new"
+    - "create"
+    - "update"
+    - "delete"
+    - "list"
+    - "get"
+    - "post"
+    - "put"
+    - "patch"
+    - "admin"
+
+conflict_check:
+  enabled: true
+  check_existing_skills: true
+  check_reserved_words: true
+  case_sensitive: false
+
+confidence_thresholds:
+  excellent: 0.9
+  good: 0.8
+  acceptable: 0.7
+  needs_review: 0.6

@@ -1,0 +1,82 @@
+# Session Summarizer - 生成规则
+
+generation:
+  # 摘要长度配置
+  summary:
+    min_length: 100      # 最少字数
+    max_length: 200      # 最多字数
+    target_length: 150   # 理想字数
+    
+  # 版本设置
+  version_start: 0
+  status: "draft"
+
+# 触发条件
+trigger:
+  - "session_end"    # 会话结束时自动触发
+  - "manual"          # 用户手动触发
+  - "api"             # API调用触发
+  - "scheduled"       # 定时任务触发
+
+# 输出配置
+output:
+  format: "markdown"     # 输出格式: markdown, yaml, json
+  status: "draft"         # 生成后状态
+  save_to_session: true    # 是否保存到会话记录
+  vectorize: true          # 是否向量化存储
+
+# 内容结构
+structure:
+  required_fields:
+    - "topic"           # 主题
+    - "question"        # 核心问题
+    - "solution"        # 解决方案
+    - "key_points"      # 关键要点
+  optional_fields:
+    - "tech_stack"     # 技术栈
+    - "conclusion"     # 结论
+    - "next_steps"     # 下一步行动
+
+# 提取规则
+extraction:
+  # 消息角色识别
+  roles:
+    - "user"
+    - "assistant"
+    - "system"
+  
+  # 关键信息类型
+  entity_types:
+    - "technology"      # 技术、框架、语言
+    - "concept"         # 概念、理论
+    - "code"            # 代码片段
+    - "configuration"   # 配置信息
+    - "command"         # 命令、操作步骤
+
+# 质量检查
+quality_check:
+  enabled: true
+  checks:
+    - "length_check"       # 长度检查
+    - "topic_identified"   # 主题是否识别
+    - "question_summary"   # 问题是否归纳
+    - "key_points_count"   # 要点数量（3-5个）
+    - "no_repetition"      # 无重复内容
+  score_threshold: 0.7
+
+# 向量化配置
+vectorization:
+  enabled: true
+  collection: "sessions"
+  fields:
+    - "topic"
+    - "question"
+    - "solution"
+    - "key_points"
+  max_tokens: 300
+
+# 元数据
+metadata:
+  author: "session-summarizer"
+  change_reason: "auto-summarized"
+  tags_auto_generate: true

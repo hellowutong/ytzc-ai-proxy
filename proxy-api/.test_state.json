@@ -1,0 +1,14 @@
+{
+  "last_run": "2026-02-02T21:23:19.405752",
+  "completed_tests": [],
+  "failed_tests": [],
+  "pending_tests": [
+    "test_config_loader_001",
+    "test_proxy_connection_001",
+    "test_session_model_001",
+    "test_skill_model_001"
+  ],
+  "session_id": "0cd7b182",
+  "start_time": null,
+  "total_runs": 127
+}

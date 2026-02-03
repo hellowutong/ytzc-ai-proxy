@@ -1,0 +1,124 @@
+@use './variables.scss' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+.theme-light {
+  @include theme-light;
+}
+
+.theme-dark {
+  @include theme-dark;
+}
+
+.app-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.page-header {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  padding: 20px;
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+
+  .stat-value {
+    font-size: 32px;
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+
+  .stat-label {
+    font-size: 14px;
+    color: var(--text-color-secondary);
+    margin-top: 8px;
+  }
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+
+  &.success {
+    background-color: rgba($success-color, 0.1);
+    color: $success-color;
+  }
+
+  &.warning {
+    background-color: rgba($warning-color, 0.1);
+    color: $warning-color;
+  }
+
+  &.danger {
+    background-color: rgba($danger-color, 0.1);
+    color: $danger-color;
+  }
+
+  &.info {
+    background-color: rgba($info-color, 0.1);
+    color: $info-color;
+  }
+}
+
+.table-operations {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-color-secondary);
+
+  .el-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "connections": [
+    {
+      "id": "conn-001",
+      "name": "DeepSeek Group",
+      "proxy_key": "tw-a1b2c3d4e5f6",
+      "small_model": {
+        "name": "deepseek-8b",
+        "base_url": "https://api.siliconflow.cn/v1/",
+        "api_key": "sk-silicon-deepseek-8b"
+      },
+      "big_model": {
+        "name": "deepseek-v3",
+        "base_url": "https://api.siliconflow.cn/v1/",
+        "api_key": "sk-silicon-deepseek-v3"
+      },
+      "status": "enabled",
+      "created_at": "2026-02-02T10:00:00Z"
+    },
+    {
+      "id": "conn-002",
+      "name": "Ollama Local",
+      "proxy_key": "tw-f6e5d4c3b2a1",
+      "small_model": {
+        "name": "llama3.2:3b",
+        "base_url": "http://localhost:11434/v1/",
+        "api_key": "ollama-local"
+      },
+      "big_model": {
+        "name": "llama3.2:70b",
+        "base_url": "http://localhost:11434/v1/",
+        "api_key": "ollama-local"
+      },
+      "status": "enabled",
+      "created_at": "2026-02-02T10:30:00Z"
+    },
+    {
+      "id": "conn-003",
+      "name": "OpenAI Production",
+      "proxy_key": "tw-112233445566",
+      "small_model": {
+        "name": "gpt-4o-mini",
+        "base_url": "https://api.openai.com/v1/",
+        "api_key": "sk-openai-gpt4o-mini"
+      },
+      "big_model": {
+        "name": "gpt-4o",
+        "base_url": "https://api.openai.com/v1/",
+        "api_key": "sk-openai-gpt4o"
+      },
+      "status": "disabled",
+      "created_at": "2026-02-02T11:00:00Z"
+    }
+  ],
+  "sessions": [
+    {
+      "session_id": "session-001",
+      "proxy_key": "tw-a1b2c3d4e5f6",
+      "status": "ended",
+      "messages": [
+        {
+          "role": "user",
+          "content": "请帮我写一个Python函数来计算斐波那契数列",
+          "timestamp": "2026-02-02T14:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "这是一个计算斐波那契数列的Python函数...",
+          "model": "deepseek-8b",
+          "timestamp": "2026-02-02T14:00:05Z"
+        }
+      ],
+      "summary": "用户请求编写斐波那契数列计算函数，AI提供了Python实现代码",
+      "vector_id": "vec-session-001",
+      "created_at": "2026-02-02T14:00:00Z",
+      "ended_at": "2026-02-02T14:05:00Z"
+    },
+    {
+      "session_id": "session-002",
+      "proxy_key": "tw-a1b2c3d4e5f6",
+      "status": "active",
+      "messages": [
+        {
+          "role": "user",
+          "content": "解释一下什么是RESTful API",
+          "timestamp": "2026-02-02T15:00:00Z"
+        }
+      ],
+      "summary": null,
+      "vector_id": null,
+      "created_at": "2026-02-02T15:00:00Z",
+      "ended_at": null
+    },
+    {
+      "session_id": "session-003",
+      "proxy_key": "tw-f6e5d4c3b2a1",
+      "status": "ended",
+      "messages": [
+        {
+          "role": "user",
+          "content": "帮我优化这段SQL查询",
+          "timestamp": "2026-02-02T16:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "SQL查询优化建议...",
+          "model": "llama3.2:3b",
+          "timestamp": "2026-02-02T16:00:03Z"
+        },
+        {
+          "role": "user",
+          "content": "可以再详细说明一下索引优化吗？",
+          "timestamp": "2026-02-02T16:00:10Z"
+        },
+        {
+          "role": "assistant",
+          "content": "索引优化详解...",
+          "model": "deepseek-v3",
+          "timestamp": "2026-02-02T16:00:15Z"
+        }
+      ],
+      "summary": "用户请求SQL查询优化，AI先使用小模型回答，后因超时切换到大模型完成索引优化说明",
+      "vector_id": "vec-session-003",
+      "created_at": "2026-02-02T16:00:00Z",
+      "ended_at": "2026-02-02T16:05:00Z"
+    }
+  ],
+  "skills": [
+    {
+      "base_id": "skill-fibonacci-generator",
+      "active_version_id": 1,
+      "created_at": "2026-02-02T14:10:00Z",
+      "versions": [
+        {
+          "version_id": 0,
+          "status": "deprecated",
+          "created_at": "2026-02-02T14:10:00Z",
+          "created_by": "system",
+          "source_session_id": "session-001",
+          "change_reason": "initial"
+        },
+        {
+          "version_id": 1,
+          "status": "published",
+          "created_at": "2026-02-02T14:30:00Z",
+          "created_by": "user",
+          "source_session_id": "session-001",
+          "change_reason": "优化代码结构和注释"
+        }
+      ]
+    },
+    {
+      "base_id": "skill-sql-optimizer",
+      "active_version_id": 0,
+      "created_at": "2026-02-02T16:10:00Z",
+      "versions": [
+        {
+          "version_id": 0,
+          "status": "draft",
+          "created_at": "2026-02-02T16:10:00Z",
+          "created_by": "system",
+          "source_session_id": "session-003",
+          "change_reason": "小模型连续失败3次，切换大模型后自动生成"
+        }
+      ]
+    }
+  ],
+  "baseskills": [
+    {
+      "id": "system-session-summarizer",
+      "name": "session-summarizer",
+      "type": "system",
+      "description": "会话摘要生成器",
+      "status": "enabled"
+    },
+    {
+      "id": "system-skill-generator",
+      "name": "skill-generator",
+      "type": "system",
+      "description": "Skill草稿生成器",
+      "status": "enabled"
+    },
+    {
+      "id": "system-skill-name-generator",
+      "name": "skill-name-generator",
+      "type": "system",
+      "description": "Skill名称生成器",
+      "status": "enabled"
+    },
+    {
+      "id": "system-vectorizer",
+      "name": "vectorizer",
+      "type": "system",
+      "description": "向量化处理器",
+      "status": "enabled"
+    }
+  ],
+  "backups": [
+    {
+      "id": "backup-001",
+      "name": "backup-20260202",
+      "size": 1048576,
+      "created_at": "2026-02-02T00:00:00Z",
+      "contents": ["sessions", "skills", "vectors", "config"]
+    }
+  ],
+  "vectors": {
+    "sessions": [
+      {
+        "id": "vec-session-001",
+        "session_id": "session-001",
+        "proxy_key": "tw-a1b2c3d4e5f6",
+        "summary": "用户请求编写斐波那契数列计算函数，AI提供了Python实现代码",
+        "vector": [0.1, 0.2, 0.3, 0.4, 0.5],
+        "created_at": "2026-02-02T14:05:00Z"
+      },
+      {
+        "id": "vec-session-003",
+        "session_id": "session-003",
+        "proxy_key": "tw-a1b2c3d4e5f6",
+        "summary": "用户请求SQL查询优化，AI先使用小模型回答，后因超时切换到大模型完成索引优化说明",
+        "vector": [0.2, 0.3, 0.4, 0.5, 0.6],
+        "created_at": "2026-02-02T16:05:00Z"
+      }
+    ],
+    "skills": [
+      {
+        "id": "vec-skill-fibonacci",
+        "base_id": "skill-fibonacci-generator",
+        "version_id": 1,
+        "content": "生成斐波那契数列的Python函数实现",
+        "vector": [0.3, 0.4, 0.5, 0.6, 0.7],
+        "created_at": "2026-02-02T14:30:00Z"
+      }
+    ]
+  },
+  "config": {
+    "app": {
+      "host": "0.0.0.0",
+      "port": 8080,
+      "data_path": "./data",
+      "session_timeout": 1800,
+      "model_timeout": 30000
+    },
+    "strategy": {
+      "fail_threshold": 3,
+      "small_model_retry": 0
+    },
+    "providers": [
+      {
+        "name": "deepseek-group",
+        "small_model": {
+          "name": "deepseek-8b",
+          "base_url": "https://api.siliconflow.cn/v1/"
+        },
+        "big_model": {
+          "name": "deepseek-v3",
+          "base_url": "https://api.siliconflow.cn/v1/"
+        },
+        "proxy_key": "tw-a1b2c3d4e5f6"
+      }
+    ]
+  }
+}

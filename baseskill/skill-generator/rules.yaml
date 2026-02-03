@@ -1,0 +1,64 @@
+# Skill Generator - 生成规则
+
+generation:
+  # 名称生成规则
+  name_pattern: "{topic}-{action}"
+  name_max_length: 50
+  name_case: "kebab"  # kebab, snake, camel
+  
+  # 描述生成规则
+  description_max_length: 100
+  description_pattern: "{action} {topic} {purpose}"
+  
+  # 版本设置
+  version_start: 0
+  status: "draft"  # draft, published
+  
+# 触发条件
+trigger:
+  - "manual"       # 用户手动触发
+  - "auto"         # 自动触发（会话结束时）
+  - "api"          # API调用触发
+
+# 输出配置
+output:
+  status: "draft"          # 生成后状态
+  save_to_repository: true  # 是否保存到仓库
+  notify_user: true         # 是否通知用户
+
+# 内容约束
+constraints:
+  max_summary_length: 200      # 摘要最大长度
+  min_instructions: 3           # 最少指令数
+  max_instructions: 5           # 最多指令数
+  require_examples: true        # 是否需要示例
+  min_examples: 2               # 最少示例数
+  example_length_max: 100       # 示例内容最大长度
+
+# 提取规则
+extraction:
+  topics:
+    - type: "keyword"
+      min_count: 1
+      max_count: 5
+  entities:
+    - type: "technology"
+    - type: "methodology"
+    - type: "concept"
+  sentiment: "neutral"
+
+# 质量检查
+quality_check:
+  enabled: true
+  checks:
+    - "name_format"
+    - "description_length"
+    - "instructions_clarity"
+    - "examples_relevance"
+  score_threshold: 0.7  # 质量分数阈值
+
+# 元数据
+metadata:
+  author: "system"  # 生成者
+  change_reason: "auto-generated from session"
+  tags_auto_generate: true

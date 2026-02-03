@@ -1,0 +1,53 @@
+# ============== Docker Compose 生产环境配置 ==============
+# 使用方法: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # ============== Proxy API (生产模式) ==============
+  proxy-api:
+    build:
+      context: ./proxy-api
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      <<: *common-environment
+      LOG_LEVEL: WARNING
+      UVICORN_WORKERS: 4
+      UVICORN_TIMEOUT_KEEP_ALIVE: 65
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://localhost:8080/health'); assert r.status==200"]
+
+  # ============== Web UI (生产模式) ==============
+  web-ui:
+    build:
+      context: ./web-ui
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    environment:
+      NODE_ENV: production
+
+  # ============== Nginx (生产模式) ==============
+  nginx:
+    image: nginx:alpine
+    container_name: ytzc-nginx
+    hostname: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - webui_dist:/usr/share/nginx/html:ro
+    depends_on:
+      - proxy-api
+      - web-ui
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+
+# ============== 网络配置覆盖 ==============
+networks:
+  ytzc-network:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1

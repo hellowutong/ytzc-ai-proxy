@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@upstash/context7-mcp": "^2.1.1",
+    "opencode-agent-browser": "^1.0.0",
     "superpowers": "^0.0.2"
   }
 }
