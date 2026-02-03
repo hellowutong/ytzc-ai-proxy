@@ -10,14 +10,18 @@ export default defineConfig({
     }
   },
   server: {
-    port: 3000,
+    port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_PROXY || 'http://proxy-api:8080',
         changeOrigin: true
       },
       '/proxy': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_PROXY || 'http://proxy-api:8080',
+        changeOrigin: true
+      },
+      '/health': {
+        target: process.env.VITE_API_PROXY || 'http://proxy-api:8080',
         changeOrigin: true
       }
     }

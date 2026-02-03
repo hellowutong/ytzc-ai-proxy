@@ -270,6 +270,44 @@ TOTAL                                              2294    887    61%
 
 ## 最近更新
 
+### 2026-02-03
+- ✅ 创建测试数据 (3 connections, 3 sessions)
+- ✅ 验证所有 API 端点正常
+- ✅ 更新前端测试报告 (doc/frontend_test_report.md)
+- ✅ 记录功能测试结果 (27+ 测试用例)
+- ⚠️ Message API 存在解析问题 (非阻塞)
+- ✅ 使用 Playwright 进行浏览器测试 (12/12 PASS)
+- ✅ 生成 8 个页面截图 (screenshots/)
+- ✅ 实现连接测试 API (/api/v1/connections/{id}/test)
+- ✅ 优化连接管理页面:
+  - 名称列添加 show-overflow-tooltip
+  - 代理地址列添加点击复制功能
+  - 新增 API Base URL 列
+  - Proxy Key 添加自动生成按钮
+  - 状态列改为 Switch 开关，可直接启用/停用
+  - 添加客户端调用说明 Alert
+  - 添加分隔线和提示文字
+- ✅ 修改 Dockerfile 支持开发模式 (npm run dev)
+- ✅ 更新 USAGE.md 文档，明确第三方客户端调用配置
+- ✅ 简化代理地址为固定端点 http://localhost:8080/proxy/v1/
+- ✅ 移除 API Base URL 列，保留配置字段
+- ✅ 添加 Proxy Key 复制按钮
+- ✅ 更新 AGENTS.md 开发进度
+- ✅ 修复 API Key 认证问题:
+  - 修改 security.py 使用 connections_db 验证 API Key
+  - 添加 SecurityManager.set_connections_ref() 函数
+  - 连接创建/修改时清除密钥缓存
+  - 修复 Proxy Key 长度问题 (24 hex chars)
+- ✅ 测试通过:
+  - GET /proxy/v1/models ✓
+  - POST /proxy/v1/ chat completions ✓
+  - POST /proxy/v1/chat/completions ✓ (OpenAI 兼容端点)
+- ✅ 修复 ChatBox 集成问题:
+  - 添加 OpenAI 兼容端点 `/proxy/v1/chat/completions`
+  - `/proxy/v1/models` 返回连接名称作为模型 ID
+  - 支持使用连接名称 (如 "SiliconFlow/DeepSeek") 进行聊天
+  - 实现正确的 SSE 流式响应格式
+
 ### 2026-02-02
 - ✅ 完成 AI 提供商集成 (OpenAI, Anthropic, DeepSeek, Google)
 - ✅ 配置并测试硅基流动 DeepSeek 提供商

@@ -32,10 +32,7 @@ services:
       MONGO_INITDB_DATABASE: ytzc_ai_proxy
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-password123}
-    command:
-      - --replSet rs0
-      - --bind_ip 0.0.0.0
-      - --wiredTigerCacheSizeGB 1
+    command: mongod --bind_ip_all --wiredTigerCacheSizeGB 1
     healthcheck:
       <<: *common-healthcheck
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
@@ -67,7 +64,7 @@ services:
       QDRANT__STORAGE__MAX_OPTIMAL_BLOCK_SIZE: 10485760
     healthcheck:
       <<: *common-healthcheck
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:6333/ || exit 1"]
     networks:
       - ytzc-network
     deploy:
@@ -94,6 +91,7 @@ services:
       - ./data:/app/data
       - ./baseskill:/app/baseskill
       - proxy_api_logs:/app/logs
+    user: "1000:1000"
     environment:
       <<: *common-environment
       # MongoDB 配置
@@ -110,7 +108,7 @@ services:
       mongodb:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       <<: *common-healthcheck
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
@@ -133,19 +131,19 @@ services:
     build:
       context: ./web-ui
       dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
     image: ytzc-web-ui:${VERSION:-latest}
     container_name: ytzc-web-ui
     hostname: web-ui
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "${WEB_PORT:-3000}:${WEB_DEV_PORT:-5173}"
     volumes:
       - ./web-ui:/app
       - /app/node_modules
-    environment:
-      <<: *common-environment
-      VITE_API_BASE_URL: http://localhost:8080
     depends_on:
       - proxy-api
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
     networks:
       - ytzc-network
     deploy:

@@ -10,7 +10,9 @@ export const connectionsApi = {
   create: (data) => request.post('/api/v1/connections', data),
   update: (id, data) => request.put(`/api/v1/connections/${id}`, data),
   delete: (id) => request.delete(`/api/v1/connections/${id}`),
-  test: (id) => request.post(`/api/v1/connections/${id}/test`)
+  test: (id) => request.post(`/api/v1/connections/${id}/test`),
+  enable: (id) => request.put(`/api/v1/connections/${id}/enable`),
+  disable: (id) => request.put(`/api/v1/connections/${id}/disable`)
 }
 
 export const providersApi = {

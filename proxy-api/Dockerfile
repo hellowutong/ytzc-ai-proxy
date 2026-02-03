@@ -27,7 +27,10 @@ COPY --from=builder /install /usr/local
 COPY --from=builder /build /app
 
 # 设置文件权限
-RUN chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app && \
+    mkdir -p /app/data/baseskill && \
+    mkdir -p /app/logs && \
+    chmod -R 777 /app/data /app/logs
 
 # 切换到非root用户
 USER appuser

@@ -8,7 +8,7 @@ import time
 import jwt
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from starlette.requests import Request
@@ -70,6 +70,15 @@ class SecurityManager:
     _cache_lock = Lock()
     _cache_ttl = 300  # 5分钟缓存
     
+    # 外部引用 connections_db (由 main.py 设置)
+    _connections_ref: Optional[List[Dict]] = None
+    
+    @classmethod
+    def set_connections_ref(cls, connections: List[Dict]):
+        """设置 connections_db 引用"""
+        cls._connections_ref = connections
+        cls.clear_key_cache()  # 清除缓存
+    
     @classmethod
     def generate_proxy_key(cls) -> str:
         """生成Proxy Key"""
@@ -128,20 +137,14 @@ class SecurityManager:
     
     @classmethod
     def _simulate_db_lookup(cls, proxy_key: str) -> Optional[Dict]:
-        """模拟数据库查询"""
-        # 返回模拟数据，实际项目中应该查询MongoDB
-        return {
-            "proxy_key": proxy_key,
-            "status": "enabled",
-            "small_model": {
-                "name": "deepseek-8b",
-                "base_url": "https://api.siliconflow.cn/v1/"
-            },
-            "big_model": {
-                "name": "deepseek-v3",
-                "base_url": "https://api.siliconflow.cn/v1/"
-            }
-        }
+        """从 connections_db 查找连接"""
+        if cls._connections_ref is None:
+            return None
+        
+        for conn in cls._connections_ref:
+            if conn.get("proxy_key") == proxy_key:
+                return conn
+        return None
     
     @classmethod
     def clear_key_cache(cls, proxy_key: str = None):

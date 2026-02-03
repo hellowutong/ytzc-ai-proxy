@@ -89,7 +89,7 @@ class OpenAIProvider(BaseAIProvider):
     
     def __init__(self, config: ModelConfig):
         super().__init__(config)
-        self.base_url = config.api_base or "https://api.openai.com/v1"
+        self.base_url = (config.api_base or "https://api.openai.com/v1").rstrip("/")
     
     async def chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         async with httpx.AsyncClient(timeout=120.0) as client:

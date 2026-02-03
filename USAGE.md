@@ -128,20 +128,30 @@ npm run dev
 
 ### 2. 智能代理转发
 
-通过 `/proxy/v1/chat/completions` 端点统一调用，兼容 OpenAI API 格式。
+通过 `/proxy/v1/` 或 `/proxy/v1/chat/completions` 端点统一调用，兼容 OpenAI API 格式。
+
+**支持的客户端**: OpenAI 官方 SDK、ChatBox、NextChat、LibreChat 等所有兼容 OpenAI API 的客户端。
 
 ```bash
-# 请求示例
+# 聊天完成 (OpenAI 兼容端点)
 curl -X POST http://localhost:8080/proxy/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Proxy-Key: tw-xxxxxxxxxxxxx" \
+  -H "Authorization: Bearer {proxy_key}" \
   -d '{
-    "model": "deepseek-chat",
+    "model": "SiliconFlow/DeepSeek",
     "messages": [
       {"role": "user", "content": "你好"}
     ]
   }'
 ```
+
+**认证方式**:
+- Header: `Authorization: Bearer {proxy_key}`
+- Proxy Key 格式: `tw-{24位十六进制字符}` (共27字符)
+
+**模型选择**:
+- 前端会显示连接名称作为模型 ID (如 "SiliconFlow/DeepSeek")
+- 实际请求会自动路由到对应的小模型或大模型配置
 
 ### 3. 会话管理
 
@@ -255,11 +265,77 @@ curl -X POST http://localhost:8080/proxy/v1/chat/completions \
 
 ### 连接管理
 
+在「连接管理」页面中，您可以添加和管理 AI 提供商的连接。
+
+#### 添加连接步骤
+
 1. 点击「添加连接」
-2. 选择提供商 (OpenAI/Anthropic/DeepSeek/Google)
-3. 填写 API 地址和 Key
-4. 点击「测试连接」验证
-5. 保存连接
+2. 填写连接配置（小模型必填，大模型可选）
+3. 点击「测试小模型」验证配置
+4. 点击「刷新」按钮生成 Proxy Key
+5. 点击「保存」
+
+#### 第三方客户端调用配置
+
+**⚠️ 重要：客户端（如 ChatBox、NextChat）需要使用 TW AI Saver 的代理地址**
+
+| 设置项 | 值 |
+|--------|-----|
+| **API 地址** | `http://localhost:8080/proxy/v1/` |
+| **Auth 密钥** | 连接列表中的 Proxy Key |
+| **模型名称** | 填写上面配置的小模型名称 |
+
+#### 错误示例 ❌
+
+```
+在 ChatBox 中：
+API 地址: https://api.siliconflow.cn/v1           # 错误：这是 AI 提供商地址
+API 地址: http://localhost:8080/api/v1/connections # 错误：这是管理 API
+模型名称: deepseek-chat                           # 错误：需要完整模型名
+```
+
+#### 正确示例 ✅
+
+```
+在 ChatBox 中：
+API 地址: http://localhost:8080/proxy/v1/          # 正确：TW AI Saver 代理地址
+Auth:     tw-20847477705e                          # 正确：Proxy Key
+模型:     deepseek-ai/DeepSeek-R1-0528-Qwen3-8B   # 正确：完整模型名
+```
+
+#### API 参考
+
+实际请求转发到 AI 提供商，参考 SiliconFlow API：
+
+```bash
+# 请求格式
+curl -X POST http://localhost:8080/proxy/v1/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <Proxy Key>" \
+  -d '{
+    "model": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+    "messages": [{"role": "user", "content": "你好"}]
+  }'
+```
+
+#### 各提供商配置示例
+
+**⚠️ 重要：AI Base URL 必须以 `/v1` 结尾，且是 AI 提供商的地址，不是 TW AI Saver 的地址**
+
+| 提供商 | AI Base URL (AI 提供商) | 模型名称 |
+|--------|-------------------------|----------|
+| **硅基流动** | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-R1-0528-Qwen3-8B` |
+| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o`, `gpt-4o-mini` |
+| **Anthropic** | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` |
+| **DeepSeek** | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| **Google** | `https://generativelanguage.googleapis.com/v1` | `gemini-1.5-pro` |
+
+#### Proxy Key 说明
+
+- **用途**: 客户端调用 API 时的认证凭据
+- **格式**: `tw-` + 24位十六进制字符串
+- **生成**: 点击表单中的「刷新」按钮自动生成
+- **安全**: 建议每个连接使用独立的 Proxy Key
 
 ### 会话管理
 
@@ -462,6 +538,8 @@ tail -f nginx/logs/access.log
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
 | v1.0.0 | 2026-02-02 | 初始版本发布 |
+| v1.0.1 | 2026-02-03 | 优化连接管理界面，增加 Proxy Key 自动生成功能 |
+| v1.1.0 | 2026-02-03 | 简化代理地址为固定端点，添加点击复制功能 |
 
 ---
 
@@ -480,4 +558,4 @@ MIT License
 
 ---
 
-> 最后更新时间: 2026-02-02
+> 最后更新时间: 2026-02-03

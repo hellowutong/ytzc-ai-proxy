@@ -114,6 +114,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { healthApi, connectionsApi, sessionsApi, skillsApi, vectorsApi } from '@/api'
+import request from '@/api/request'
 
 const stats = ref({
   connections: 0,
@@ -137,26 +138,34 @@ let pieChartInstance = null
 
 async function loadStats() {
   try {
-    const [health, connections, sessions, skills] = await Promise.all([
+    const [health, connections, sessions, skills, statsResponse] = await Promise.all([
       healthApi.getHealth().catch(() => ({})),
       connectionsApi.list().catch(() => []),
       sessionsApi.list({ limit: 5 }).catch(() => ({ items: [] })),
-      skillsApi.list({ limit: 5 }).catch(() => ({ items: [] }))
+      skillsApi.list({ limit: 5 }).catch(() => ({ items: [] })),
+      request.get('/api/v1/stats').catch(() => ({}))
     ])
 
-    stats.value.connections = connections.length || 0
+    // 连接数据可能是数组或对象
+    stats.value.connections = Array.isArray(connections) ? connections.length : (connections.data?.length || 0)
     stats.value.sessions = sessions.items?.length || 0
     stats.value.skills = skills.items?.length || 0
+    stats.value.vectors = 0 // vectors需要单独API调用
+    
     recentSessions.value = sessions.items || []
 
     systemStatus.value = {
-      backend: true,
-      mongodb: health.mongodb || false,
-      qdrant: health.qdrant || false,
-      version: health.version || 'v1.0.0'
+      backend: health.status === 'healthy',
+      mongodb: false, // 暂时设为false，需要实际检查
+      qdrant: false,  // 暂时设为false，需要实际检查
+      version: health.version || statsResponse?.version || 'v1.0.0'
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
+    // 设置默认值避免前端崩溃
+    stats.value = { connections: 0, sessions: 0, skills: 0, vectors: 0 }
+    recentSessions.value = []
+    systemStatus.value = { backend: false, mongodb: false, qdrant: false, version: 'v1.0.0' }
   }
 }
 

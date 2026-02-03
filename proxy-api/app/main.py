@@ -7,13 +7,16 @@ https://localhost:8080/redoc - ReDoc
 """
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, AsyncGenerator
 from datetime import datetime
 from pathlib import Path
 import uuid
+import json
 
 from app.services.baseskill_service import service as baseskill_service
+from app.core.security import SecurityManager
 
 # 数据库模块导入
 try:
@@ -91,6 +94,9 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """应用启动时连接数据库"""
+    # 设置 connections_db 引用到 SecurityManager
+    SecurityManager.set_connections_ref(connections_db)
+    
     if DB_AVAILABLE:
         try:
             await MongoDB.connect()
@@ -98,6 +104,36 @@ async def startup_event():
             print("数据库连接成功")
         except Exception as e:
             print(f"数据库连接失败: {e}")
+    
+    # 添加一些测试数据
+    if len(skills_db) == 0:
+        skills_db.append({
+            "base_id": "skill-generator",
+            "active_version_id": 0,
+            "created_at": datetime.now().isoformat(),
+            "versions": [{
+                "version_id": 0,
+                "status": "published",
+                "created_at": datetime.now().isoformat(),
+                "created_by": "system",
+                "source_session_id": None,
+                "change_reason": "initial"
+            }]
+        })
+        skills_db.append({
+            "base_id": "session-summarizer",
+            "active_version_id": 0,
+            "created_at": datetime.now().isoformat(),
+            "versions": [{
+                "version_id": 0,
+                "status": "published",
+                "created_at": datetime.now().isoformat(),
+                "created_by": "system",
+                "source_session_id": None,
+                "change_reason": "initial"
+            }]
+        })
+        print("已添加测试数据")
 
 
 # 关闭事件
@@ -277,14 +313,37 @@ async def create_connection(data: ConnectionCreate):
     connection = {
         "id": str(uuid.uuid4())[:8],
         "name": data.name,
-        "proxy_key": f"tw-{uuid.uuid4().hex[:12]}",
+        "proxy_key": f"tw-{uuid.uuid4().hex[:24]}",
         "small_model": data.small_model.model_dump(),
         "big_model": data.big_model.model_dump(),
         "status": "enabled",
         "created_at": datetime.now().isoformat()
     }
     connections_db.append(connection)
+    SecurityManager.clear_key_cache()
     return connection
+
+@app.get("/api/v1/connections/models", tags=["Connections"], summary="列出代理模型", description="获取所有可用的代理模型名称列表")
+async def list_connection_models():
+    """列出所有连接的名称（代理模型列表）
+    
+    返回所有启用的连接名称，可作为代理调用的模型标识符。
+    """
+    models = []
+    for conn in connections_db:
+        if conn.get("status") == "enabled":
+            models.append({
+                "id": conn.get("name", ""),
+                "name": conn.get("name", ""),
+                "object": "model",
+                "small_model": conn.get("small_model", {}).get("name", ""),
+                "big_model": conn.get("big_model", {}).get("name", ""),
+                "proxy_key": conn.get("proxy_key", "")
+            })
+    return {
+        "data": models,
+        "object": "list"
+    }
 
 @app.get("/api/v1/connections/{id}")
 async def get_connection(id: str):
@@ -305,6 +364,7 @@ async def update_connection(id: str, data: ConnectionCreate):
                 "small_model": data.small_model.model_dump(),
                 "big_model": data.big_model.model_dump()
             }
+            SecurityManager.clear_key_cache()
             return connections_db[i]
     raise HTTPException(status_code=404, detail="连接不存在")
 
@@ -315,6 +375,7 @@ async def delete_connection(id: str):
     for i, conn in enumerate(connections_db):
         if conn["id"] == id:
             connections_db.pop(i)
+            SecurityManager.clear_key_cache()
             return {"message": "删除成功"}
     raise HTTPException(status_code=404, detail="连接不存在")
 
@@ -324,6 +385,7 @@ async def disable_connection(id: str):
     for i, conn in enumerate(connections_db):
         if conn["id"] == id:
             connections_db[i]["status"] = "disabled"
+            SecurityManager.clear_key_cache()
             return connections_db[i]
     raise HTTPException(status_code=404, detail="连接不存在")
 
@@ -333,6 +395,7 @@ async def enable_connection(id: str):
     for i, conn in enumerate(connections_db):
         if conn["id"] == id:
             connections_db[i]["status"] = "enabled"
+            SecurityManager.clear_key_cache()
             return connections_db[i]
     raise HTTPException(status_code=404, detail="连接不存在")
 
@@ -341,8 +404,96 @@ async def regenerate_key(id: str):
     """重新生成Proxy Key"""
     for i, conn in enumerate(connections_db):
         if conn["id"] == id:
-            connections_db[i]["proxy_key"] = f"tw-{uuid.uuid4().hex[:12]}"
+            connections_db[i]["proxy_key"] = f"tw-{uuid.uuid4().hex[:24]}"
+            SecurityManager.clear_key_cache()
             return {"proxy_key": connections_db[i]["proxy_key"]}
+    raise HTTPException(status_code=404, detail="连接不存在")
+
+@app.post("/api/v1/connections/{id}/test")
+async def test_connection(id: str):
+    """测试连接 - 直接调用供应商 API"""
+    import httpx
+    
+    for conn in connections_db:
+        if conn["id"] == id:
+            small_model = conn.get("small_model", {})
+            big_model = conn.get("big_model", {})
+            conn_name = conn.get("name", "")
+            
+            results = {
+                "connection_name": conn_name,
+                "proxy_key": conn.get("proxy_key", ""),
+                "proxy_url": "/proxy/v1/",
+                "small_model": {},
+                "big_model": {}
+            }
+            
+            async def test_model(model_config):
+                if not model_config.get("name") or not model_config.get("base_url") or not model_config.get("api_key"):
+                    return {
+                        "model_name": model_config.get("name", ""),
+                        "status": "skipped",
+                        "message": "模型配置不完整"
+                    }
+                
+                base_url = model_config.get("base_url", "").rstrip("/")
+                model_name = model_config.get("name")
+                api_key = model_config.get("api_key")
+                
+                test_url = f"{base_url}/chat/completions"
+                test_body = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 5,
+                    "temperature": 0.1
+                }
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                if "anthropic" in base_url:
+                    headers["x-api-key"] = api_key
+                    headers["anthropic-version"] = "2023-06-01"
+                
+                try:
+                    async with httpx.AsyncClient(timeout=15) as client:
+                        response = await client.post(test_url, json=test_body, headers=headers)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            return {
+                                "model_name": model_name,
+                                "status": "success",
+                                "message": "调用成功",
+                                "response_id": data.get("id", "")
+                            }
+                        else:
+                            error_detail = response.text[:200] if response.text else "Unknown error"
+                            return {
+                                "model_name": model_name,
+                                "status": "failed",
+                                "message": f"HTTP {response.status_code}: {error_detail}"
+                            }
+                except httpx.TimeoutException:
+                    return {
+                        "model_name": model_name,
+                        "status": "failed",
+                        "message": "请求超时"
+                    }
+                except httpx.RequestError as e:
+                    return {
+                        "model_name": model_name,
+                        "status": "failed",
+                        "message": f"连接错误: {str(e)}"
+                    }
+            
+            results["small_model"] = await test_model(small_model)
+            results["big_model"] = await test_model(big_model)
+            
+            return results
+    
     raise HTTPException(status_code=404, detail="连接不存在")
 
 
@@ -377,7 +528,7 @@ async def list_sessions(page: int = 1, limit: int = 20):
     start = (page - 1) * limit
     end = start + limit
     return {
-        "data": sessions_db[start:end],
+        "items": sessions_db[start:end],
         "total": len(sessions_db),
         "page": page,
         "limit": limit
@@ -497,7 +648,7 @@ async def list_skills(page: int = 1, limit: int = 20):
     start = (page - 1) * limit
     end = start + limit
     return {
-        "data": skills_db[start:end],
+        "items": skills_db[start:end],
         "total": len(skills_db),
         "page": page,
         "limit": limit
@@ -802,33 +953,25 @@ async def list_models(
 ):
     """列出可用模型 - 需要认证"""
     from app.core.security import verify_api_key, check_rate_limit
-    from app.infrastructure.ai_provider import ProviderType
     
     await check_rate_limit(request)
-    await verify_api_key(request, authorization)
-    
-    if not providers_config.get("providers"):
-        return {
-            "data": [
-                {"id": "deepseek-8b", "object": "model"},
-                {"id": "deepseek-v3", "object": "model"}
-            ],
-            "object": "list"
-        }
+    connection = await verify_api_key(request, authorization)
     
     all_models = []
-    for provider in providers_config.get("providers", []):
-        provider_type = ProviderType(provider.get("type", "openai"))
-        for model_key in ["small_model", "big_model"]:
-            if model_key in provider:
-                model_data = provider[model_key]
-                model_id = model_data.get("id", "")
-                if model_id:
-                    all_models.append({
-                        "id": model_id,
-                        "object": "model",
-                        "owned_by": provider_type.value
-                    })
+    for model_key in ["small_model", "big_model"]:
+        model_data = connection.get(model_key, {})
+        model_name = model_data.get("name", "")
+        if model_name:
+            all_models.append({
+                "id": connection.get("name", ""),
+                "object": "model",
+                "model_name": model_name
+            })
+    
+    return {
+        "data": all_models,
+        "object": "list"
+    }
     
     if not all_models:
         all_models = [
@@ -841,7 +984,7 @@ async def list_models(
         "object": "list"
     }
 
-@app.post("/proxy/v1/chat/completions")
+@app.post("/proxy/v1/")
 async def chat_completions(
     request: Request,
     request_body: dict,
@@ -864,32 +1007,67 @@ async def chat_completions(
         details={"model": request_body.get("model", "unknown")}
     )
     
-    model = request_body.get("model", "deepseek-chat")
+    model = request_body.get("model", "")
     messages_data = request_body.get("messages", [])
     temperature = request_body.get("temperature", 0.7)
     max_tokens = request_body.get("max_tokens")
     stream = request_body.get("stream", False)
     
+    if not model:
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(datetime.now().timestamp()),
+            "model": "",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "请在请求中指定 model 参数"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+    
     provider = None
     provider_type = ProviderType.OPENAI
     
-    for p in providers_config.get("providers", []):
+    # 首先检查 model 是否匹配实际的模型名称
+    for conn in connections_db:
         for model_key in ["small_model", "big_model"]:
-            if model_key in p:
-                model_data = p[model_key]
-                if model_data.get("id") == model:
-                    provider_type = ProviderType(p.get("type", "openai"))
-                    provider_config = ModelConfig(
-                        name=model,
-                        provider=provider_type,
-                        api_base=model_data.get("api_base", ""),
-                        api_key=model_data.get("api_key", ""),
-                        max_tokens=model_data.get("max_tokens", 4096)
-                    )
-                    provider = AIProviderFactory.get_provider(provider_type, provider_config)
-                    break
+            model_data = conn.get(model_key, {})
+            model_name = model_data.get("name", "")
+            if model_name == model:
+                provider_type = ProviderType("openai")
+                provider_config = ModelConfig(
+                    name=model,
+                    provider=provider_type,
+                    api_base=model_data.get("base_url", ""),
+                    api_key=model_data.get("api_key", ""),
+                    max_tokens=model_data.get("max_tokens", 4096)
+                )
+                provider = AIProviderFactory.get_provider(provider_type, provider_config)
+                break
         if provider:
             break
+    
+    # 如果没有找到，检查 model 是否匹配连接名称（使用小模型）
+    if not provider:
+        for conn in connections_db:
+            if conn.get("name") == model:
+                model_data = conn.get("small_model", {})
+                provider_type = ProviderType("openai")
+                provider_config = ModelConfig(
+                    name=model_data.get("name", ""),
+                    provider=provider_type,
+                    api_base=model_data.get("base_url", ""),
+                    api_key=model_data.get("api_key", ""),
+                    max_tokens=model_data.get("max_tokens", 4096)
+                )
+                provider = AIProviderFactory.get_provider(provider_type, provider_config)
+                model = model_data.get("name", "")  # 使用实际模型名称
+                break
     
     if not provider:
         return {
@@ -901,7 +1079,7 @@ async def chat_completions(
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "请先在 /api/v1/providers 配置AI供应商"
+                    "content": f"未找到模型 '{model}' 的配置，请检查连接配置"
                 },
                 "finish_reason": "stop"
             }],
@@ -918,6 +1096,201 @@ async def chat_completions(
     )
     
     try:
+        response = await provider.chat_completion(chat_request)
+        return {
+            "id": response.id,
+            "object": response.object,
+            "created": response.created,
+            "model": response.model,
+            "choices": [{
+                "index": choice.index,
+                "message": {
+                    "role": choice.message.role,
+                    "content": choice.message.content
+                },
+                "finish_reason": choice.finish_reason
+            } for choice in response.choices],
+            "usage": response.usage
+        }
+    except Exception as e:
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(datetime.now().timestamp()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": f"调用AI供应商失败: {str(e)}"
+                },
+                "finish_reason": "error"
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+
+@app.post("/proxy/v1/chat/completions")
+async def chat_completions_openai(
+    request: Request,
+    request_body: dict,
+    authorization: str = Header(None)
+):
+    """聊天补全 - OpenAI兼容端点"""
+    from app.core.security import verify_api_key, check_rate_limit, AuditLogger
+    from app.infrastructure.ai_provider import AIProviderFactory, ProviderType, ModelConfig, ChatMessage, ChatCompletionRequest
+    
+    await check_rate_limit(request)
+    connection = await verify_api_key(request, authorization)
+    
+    client_ip = request.client.host if request.client else "unknown"
+    proxy_key = connection.get("proxy_key", "")
+    
+    AuditLogger.log(
+        event="chat_completion",
+        user_id=proxy_key,
+        ip=client_ip,
+        details={"model": request_body.get("model", "unknown")}
+    )
+    
+    model = request_body.get("model", "")
+    messages_data = request_body.get("messages", [])
+    temperature = request_body.get("temperature", 0.7)
+    max_tokens = request_body.get("max_tokens")
+    stream = request_body.get("stream", False)
+    
+    if not model:
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(datetime.now().timestamp()),
+            "model": "",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "请在请求中指定 model 参数"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+    
+    provider = None
+    provider_type = ProviderType.OPENAI
+    
+    for conn in connections_db:
+        for model_key in ["small_model", "big_model"]:
+            model_data = conn.get(model_key, {})
+            model_name = model_data.get("name", "")
+            if model_name == model:
+                provider_type = ProviderType("openai")
+                provider_config = ModelConfig(
+                    name=model,
+                    provider=provider_type,
+                    api_base=model_data.get("base_url", ""),
+                    api_key=model_data.get("api_key", ""),
+                    max_tokens=model_data.get("max_tokens", 4096)
+                )
+                provider = AIProviderFactory.get_provider(provider_type, provider_config)
+                break
+        if provider:
+            break
+    
+    if not provider:
+        for conn in connections_db:
+            if conn.get("name") == model:
+                model_data = conn.get("small_model", {})
+                provider_type = ProviderType("openai")
+                provider_config = ModelConfig(
+                    name=model_data.get("name", ""),
+                    provider=provider_type,
+                    api_base=model_data.get("base_url", ""),
+                    api_key=model_data.get("api_key", ""),
+                    max_tokens=model_data.get("max_tokens", 4096)
+                )
+                provider = AIProviderFactory.get_provider(provider_type, provider_config)
+                model = model_data.get("name", "")
+                break
+    
+    if not provider:
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(datetime.now().timestamp()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": f"未找到模型 '{model}' 的配置，请检查连接配置"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+    
+    messages = [ChatMessage(role=m.get("role", "user"), content=m.get("content", "")) for m in messages_data]
+    chat_request = ChatCompletionRequest(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=stream
+    )
+    
+    async def generate_stream():
+        first_chunk = True
+        try:
+            async for chunk in provider.chat_completion_stream(chat_request):
+                if first_chunk:
+                    chunk_data = {
+                        "id": f"chatcmpl-{uuid.uuid4().hex}",
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now().timestamp()),
+                        "model": model,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": chunk, "role": "assistant"},
+                            "finish_reason": None
+                        }]
+                    }
+                    first_chunk = False
+                else:
+                    chunk_data = {
+                        "id": f"chatcmpl-{uuid.uuid4().hex}",
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now().timestamp()),
+                        "model": model,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": chunk},
+                            "finish_reason": None
+                        }]
+                    }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            error_data = {
+                "error": {
+                    "message": str(e),
+                    "type": "invalid_request_error"
+                }
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+            yield "data: [DONE]\n\n"
+    
+    try:
+        if stream:
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        
         response = await provider.chat_completion(chat_request)
         return {
             "id": response.id,

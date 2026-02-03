@@ -2,15 +2,15 @@
 // 创建数据库和用户
 
 // 切换到目标数据库
-db = db.getSiblingDB('tw_ai_proxy');
+db = db.getSiblingDB('ytzc_ai_proxy');
 
 // 创建管理员用户
 db.createUser({
     user: 'admin',
     pwd: 'password123',
     roles: [
-        { role: 'readWrite', db: 'tw_ai_proxy' },
-        { role: 'dbAdmin', db: 'tw_ai_proxy' }
+        { role: 'readWrite', db: 'ytzc_ai_proxy' },
+        { role: 'dbAdmin', db: 'ytzc_ai_proxy' }
     ]
 });
 
@@ -78,6 +78,6 @@ db.skills.insertMany([
 ]);
 
 print("MongoDB 初始化完成!");
-print("数据库: tw_ai_proxy");
+print("数据库: ytzc_ai_proxy");
 print("用户: admin / password123");
 print("集合: sessions, skills, connections, vectors, backups, baseskills, audit_logs");
