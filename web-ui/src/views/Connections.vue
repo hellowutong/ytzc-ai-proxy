@@ -10,7 +10,16 @@
 
     <el-table :data="connections" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="ID" width="100" />
-      <el-table-column prop="name" label="名称" min-width="150" show-overflow-tooltip />
+      <el-table-column label="名称" min-width="150">
+        <template #default="{ row }">
+          <el-link 
+            type="primary" 
+            @click="copyToClipboard(row.name)"
+          >
+            <span class="connection-name">{{ row.name }}</span>
+          </el-link>
+        </template>
+      </el-table-column>
       <el-table-column label="代理地址" min-width="200">
         <template #default="{ row }">
           <el-link 
@@ -489,6 +498,11 @@ onMounted(() => {
   font-family: monospace;
   font-size: 12px;
   color: #67c23a;
+}
+
+.connection-name {
+  font-weight: 500;
+  color: #409eff;
 }
 
 .form-tip {
