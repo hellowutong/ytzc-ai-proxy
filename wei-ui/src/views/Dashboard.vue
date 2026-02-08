@@ -132,6 +132,7 @@ onMounted(() => {
   width: 100%;
   overflow-x: hidden;
   box-sizing: border-box;
+  padding-right: 5px;
 }
 
 .dashboard h2 {
@@ -145,22 +146,30 @@ onMounted(() => {
   width: 100%;
 }
 
+.stats-row .el-col {
+  width: 25%;
+  max-width: 25%;
+  flex: 0 0 25%;
+}
+
 .stat-card {
   text-align: center;
   width: 100%;
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: bold;
   color: #409EFF;
   margin-bottom: 10px;
   overflow-x: hidden;
+  word-break: break-all;
 }
 
 .stat-label {
   color: #606266;
   font-size: 14px;
+  word-break: break-all;
 }
 
 .charts-row {
@@ -168,30 +177,63 @@ onMounted(() => {
   width: 100%;
 }
 
+.charts-row .el-row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
 .charts-row .el-col {
-  max-width: 50%;
   width: 50%;
+  max-width: 50%;
+  flex: 0 0 50%;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
 }
 
 .status-row {
   width: 100%;
 }
 
+.status-row .el-row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
 .status-row .el-col {
-  max-width: 50%;
   width: 50%;
+  max-width: 50%;
+  flex: 0 0 50%;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
 }
 
 .status-list, .rss-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  width: 100%;
 }
 
 .status-item, .rss-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow-x: hidden;
+  word-break: break-all;
+}
+
+:deep(.el-card) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:deep(.el-card__body) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: hidden;
 }
 </style>

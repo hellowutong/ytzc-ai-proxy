@@ -19,17 +19,20 @@
   width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
+  padding-right: 5px;
 }
 
 .page-header {
   margin-bottom: 20px;
   overflow-x: hidden;
+  width: 100%;
 
   h2 {
     margin: 0;
     font-size: 24px;
     color: #303133;
     overflow-x: hidden;
+    word-break: break-all;
   }
 }
 
@@ -41,6 +44,14 @@
 }
 
 :deep(.el-card__body) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+:deep(.el-empty) {
+  width: 100%;
   max-width: 100%;
   overflow-x: hidden;
 }

@@ -322,8 +322,6 @@
                 </template>
               </el-table-column>
             </el-table>
-
-            <el-empty v-else description="暂无配置的知识库Skill" :image-size="60" style="margin: 5px 0; padding: 5px 0; line-height: 1;" />
         </template>
 
         <!-- Web Search Config -->
