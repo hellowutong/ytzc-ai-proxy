@@ -252,7 +252,7 @@
         </el-form-item>
 
         <!-- Knowledge Base Config -->
-        <el-divider>知识库配置</el-divider>
+        <el-divider style="margin: 15px 0;">知识库配置</el-divider>
         
         <el-form-item label="启用知识库">
           <el-switch v-model="form.knowledge.enabled" />
@@ -323,11 +323,11 @@
               </el-table-column>
             </el-table>
 
-            <el-empty v-else description="暂无配置的知识库Skill" :image-size="60" style="margin: 10px 0; padding: 10px 0;" />
+            <el-empty v-else description="暂无配置的知识库Skill" :image-size="60" style="margin: 5px 0; padding: 5px 0; line-height: 1;" />
         </template>
 
         <!-- Web Search Config -->
-        <el-divider style="margin-top: 10px;">联网搜索配置</el-divider>
+        <el-divider style="margin: 5px 0; margin-top: 10px;">联网搜索配置</el-divider>
         
         <el-form-item label="启用搜索">
           <el-switch v-model="form.web_search.enabled" />
@@ -388,10 +388,10 @@
               </el-table-column>
             </el-table>
 
-            <el-empty v-else description="暂无配置的联网搜索Skill" :image-size="60" style="margin: 10px 0; padding: 10px 0;" />
+            <el-empty v-else description="暂无配置的联网搜索Skill" :image-size="60" style="margin: 5px 0; padding: 5px 0; line-height: 1;" />
 
             <!-- Search Targets -->
-            <el-divider style="margin-top: 10px;" />
+            <el-divider style="margin: 5px 0; margin-top: 10px;" />
             <el-form-item label="搜索目标">
               <el-checkbox-group v-model="form.web_search.target">
                 <el-checkbox

@@ -129,20 +129,25 @@ onMounted(() => {
 <style scoped>
 .dashboard {
   max-width: 100%;
+  width: 100%;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .dashboard h2 {
   margin-bottom: 20px;
   color: #303133;
+  overflow-x: hidden;
 }
 
 .stats-row {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .stat-card {
   text-align: center;
+  width: 100%;
 }
 
 .stat-value {
@@ -150,6 +155,7 @@ onMounted(() => {
   font-weight: bold;
   color: #409EFF;
   margin-bottom: 10px;
+  overflow-x: hidden;
 }
 
 .stat-label {
@@ -159,6 +165,21 @@ onMounted(() => {
 
 .charts-row {
   margin-bottom: 20px;
+  width: 100%;
+}
+
+.charts-row .el-col {
+  max-width: 50%;
+  width: 50%;
+}
+
+.status-row {
+  width: 100%;
+}
+
+.status-row .el-col {
+  max-width: 50%;
+  width: 50%;
 }
 
 .status-list, .rss-list {
@@ -171,5 +192,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow-x: hidden;
 }
 </style>

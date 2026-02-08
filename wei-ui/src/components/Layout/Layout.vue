@@ -18,11 +18,17 @@ import Header from './Header.vue'
 <style scoped>
 .layout-container {
   height: 100vh;
+  width: 100%;
+  overflow: hidden;
 }
 
 .main-content {
   background-color: #f5f7fa;
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 </style>

@@ -16,20 +16,32 @@
 .skill-container {
   padding: 20px;
   max-width: 100%;
+  width: 100%;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .page-header {
   margin-bottom: 20px;
+  overflow-x: hidden;
 
   h2 {
     margin: 0;
     font-size: 24px;
     color: #303133;
+    overflow-x: hidden;
   }
 }
 
 :deep(.el-card) {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+:deep(.el-card__body) {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 </style>
