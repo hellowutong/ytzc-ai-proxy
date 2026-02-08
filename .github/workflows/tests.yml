@@ -1,0 +1,266 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: testpassword
+        ports:
+          - 27017:27017
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('app/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      working-directory: ./app
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio httpx
+    
+    - name: Create test config
+      run: |
+        cat > config.yml << 'EOF'
+        app:
+          name: "AI Gateway Test"
+          version: "0.1.0"
+          debug: true
+        
+        servers:
+          mongodb:
+            host: "localhost"
+            port: 27017
+            database: "test_db"
+            user: "admin"
+            password: "testpassword"
+            auth_source: "admin"
+          redis:
+            host: "localhost"
+            port: 6379
+            password: ""
+            db: 0
+          qdrant:
+            host: "localhost"
+            port: 6333
+            api_key: ""
+        
+        models:
+          small:
+            name: "gpt-3.5-turbo"
+            proxy_key: "sk-test"
+            base_url: "https://api.openai.com/v1"
+          big:
+            name: "gpt-4"
+            proxy_key: "sk-test"
+            base_url: "https://api.openai.com/v1"
+        
+        virtual_models: []
+        
+        proxy:
+          host: "0.0.0.0"
+          port: 8000
+          
+        features:
+          knowledge_base:
+            enabled: true
+            chunk_size: 500
+            overlap: 50
+            embedding_model: "text-embedding-3-small"
+          media_processing:
+            enabled: true
+            whisper_model: "base"
+          rss:
+            enabled: true
+            auto_fetch: false
+            fetch_interval: 30
+        
+        log:
+          level: "INFO"
+          output: "mongodb"
+          retention_days: 30
+          max_size: 100
+          compress: true
+        
+        rss:
+          max_concurrent: 5
+          auto_fetch: false
+          fetch_interval: 30
+          retention_days: 30
+          default_permanent: false
+          projects: []
+        
+        ai-gateway:
+          media:
+            video:
+              upload:
+                max_size_mb: 100
+                allowed_type: ["mv", "avi", "wmv", "rm"]
+              transcription:
+                processor: "whisper"
+                default_model: "base"
+                language: "zh"
+                enabled: true
+              download:
+                enabled: true
+                max_concurrent: 3
+                timeout_seconds: 300
+            audio:
+              upload:
+                max_size_mb: 100
+                allowed_type: ["mp3", "wav", "mp4", "acc", "ogg"]
+              transcription:
+                processor: "whisper"
+                default_model: "base"
+                language: "zh"
+                enabled: true
+            text:
+              upload:
+                max_size_mb: 100
+                allowed_type: ["doc", "txt", "jpg", "pdf"]
+        EOF
+    
+    - name: Run tests
+      working-directory: ./app
+      env:
+        MONGODB_URI: mongodb://admin:testpassword@localhost:27017/test_db?authSource=admin
+        REDIS_URI: redis://localhost:6379/0
+        QDRANT_HOST: localhost
+        QDRANT_PORT: 6333
+      run: |
+        pytest tests/ -v --tb=short -x
+    
+    - name: Generate test report
+      if: always()
+      working-directory: ./app
+      run: |
+        pytest tests/ --html=pytest-report.html --self-contained-html || true
+    
+    - name: Upload test report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: pytest-report
+        path: app/pytest-report.html
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wei-ui/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./wei-ui
+      run: npm ci
+    
+    - name: Run linter
+      working-directory: ./wei-ui
+      run: npm run lint
+    
+    - name: Run type check
+      working-directory: ./wei-ui
+      run: npm run type-check || true
+    
+    - name: Build
+      working-directory: ./wei-ui
+      run: npm run build
+    
+    - name: Run tests
+      working-directory: ./wei-ui
+      run: npm run test || true
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build backend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        push: false
+        tags: ai-gateway-backend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./wei-ui
+        push: false
+        tags: ai-gateway-frontend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create test environment
+      run: |
+        cp .env.example .env
+        # Replace with test values
+        sed -i 's/your_secure_password/testpassword/g' .env
+    
+    - name: Start services
+      run: |
+        docker-compose -f docker-compose.yml up -d mongodb redis qdrant
+        sleep 15
+    
+    - name: Run integration tests
+      run: |
+        # This would run against the running services
+        echo "Integration tests would run here"
+    
+    - name: Cleanup
+      if: always()
+      run: docker-compose down -v

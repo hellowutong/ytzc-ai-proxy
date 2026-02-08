@@ -1,0 +1,210 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ secrets.DOCKER_USERNAME }}/ai-gateway-backend
+          ${{ secrets.DOCKER_USERNAME }}/ai-gateway-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    
+    - name: Build and push backend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/ai-gateway-backend:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build and push frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./wei-ui
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/ai-gateway-frontend:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+    
+    - name: Deploy to staging
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'EOF'
+          cd /opt/ai-gateway
+          
+          # Pull latest code
+          git pull origin main
+          
+          # Update images
+          export BACKEND_IMAGE=${{ secrets.DOCKER_USERNAME }}/ai-gateway-backend:${{ github.sha }}
+          export FRONTEND_IMAGE=${{ secrets.DOCKER_USERNAME }}/ai-gateway-frontend:${{ github.sha }}
+          
+          # Update docker-compose with new images
+          sed -i "s|image: ai-gateway-backend:.*|image: $BACKEND_IMAGE|g" docker-compose.prod.yml
+          sed -i "s|image: ai-gateway-frontend:.*|image: $FRONTEND_IMAGE|g" docker-compose.prod.yml
+          
+          # Pull and restart
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+          
+          # Health check
+          sleep 10
+          curl -f http://localhost:8000/api/v1/health || exit 1
+          
+          # Cleanup
+          docker system prune -f
+          
+          echo "Deployment to staging completed!"
+        EOF
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+    
+    - name: Deploy to production
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+          cd /opt/ai-gateway
+          
+          # Create backup before deployment
+          ./scripts/backup.sh
+          
+          # Pull latest code
+          git fetch --tags
+          git checkout ${{ github.ref_name }}
+          
+          # Update images
+          export BACKEND_IMAGE=${{ secrets.DOCKER_USERNAME }}/ai-gateway-backend:${{ github.sha }}
+          export FRONTEND_IMAGE=${{ secrets.DOCKER_USERNAME }}/ai-gateway-frontend:${{ github.sha }}
+          
+          # Update docker-compose with new images
+          sed -i "s|image: ai-gateway-backend:.*|image: $BACKEND_IMAGE|g" docker-compose.prod.yml
+          sed -i "s|image: ai-gateway-frontend:.*|image: $FRONTEND_IMAGE|g" docker-compose.prod.yml
+          
+          # Rolling deployment
+          echo "Starting rolling deployment..."
+          
+          # Update backend with zero downtime
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --scale app=2 app
+          sleep 10
+          
+          # Health check
+          curl -f http://localhost:8000/api/v1/health || exit 1
+          
+          # Scale back to 1
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --scale app=1 app
+          
+          # Update frontend
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d wei-ui
+          
+          # Health check
+          sleep 5
+          curl -f http://localhost || exit 1
+          
+          # Cleanup
+          docker system prune -f
+          
+          echo "Deployment to production completed!"
+        EOF
+    
+    - name: Notify deployment
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  rollback:
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: deploy-production
+    environment: production
+    
+    steps:
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+    
+    - name: Rollback deployment
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+          cd /opt/ai-gateway
+          
+          # Rollback to previous version
+          git reset --hard HEAD~1
+          
+          # Restart with previous version
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+          
+          # Health check
+          sleep 10
+          curl -f http://localhost:8000/api/v1/health
+          
+          echo "Rollback completed!"
+        EOF

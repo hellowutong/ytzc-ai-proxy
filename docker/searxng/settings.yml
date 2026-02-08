@@ -1,0 +1,257 @@
+# SearxNG Settings Configuration
+# For AI Gateway - Privacy-respecting metasearch engine
+
+general:
+  # Debug mode (disable in production)
+  debug: false
+  
+  # Instance information
+  instance_name: "AI Gateway Search"
+  contact_url: false
+  
+  # Enable if your instance is public
+  public_instance: false
+  
+  # Privacy settings
+  enable_metrics: false
+
+brand:
+  # Brand customization
+  new_issue_url: false
+  docs_url: false
+  public_instances: false
+  wiki_url: false
+  issue_url: false
+
+search:
+  # Search behavior
+  safe_search: 2  # 0 = None, 1 = Moderate, 2 = Strict
+  autocomplete: "duckduckgo"
+  autocomplete_min: 4
+  
+  # Default search language
+  default_lang: "auto"
+  
+  # Available languages
+  languages:
+    - all
+    - en
+    - en-US
+    - zh
+    - zh-CN
+    - ja
+    - ko
+    - de
+    - fr
+    - es
+  
+  # Number of results per page
+  results_per_page: 10
+  
+  # Max number of results
+  max_results: 50
+  
+  # Timeout for search requests
+  timeout: 10.0
+  
+  # Enable HTTP/2
+  enable_http2: true
+  
+  # Retry limit
+  retry_limit: 3
+
+server:
+  # Server configuration
+  port: 8080
+  bind_address: "0.0.0.0"
+  
+  # Base URL (set via environment variable)
+  base_url: false
+  
+  # Image proxy
+  image_proxy: false
+  
+  # HTTP protocol version
+  http_protocol_version: "1.1"
+  
+  # Secret key (set via environment variable)
+  secret_key: "ultrasecretkey"
+  
+  # Debug mode
+  debug: false
+  
+  # Request timeout
+  request_timeout: 10.0
+  
+  # Number of workers
+  workers: 4
+  
+  # Threads per worker
+  threads: 4
+
+ui:
+  # UI customization
+  static_path: ""
+  templates_path: ""
+  default_theme: simple
+  default_locale: ""
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+  default_infobox_template: ""
+  results_on_new_tab: false
+  url_formatting: "pretty"
+  theme_args:
+    simple_style: auto
+
+outgoing:
+  # Proxy configuration
+  proxies:
+    http:
+      - http://proxy1:8080
+    https:
+      - http://proxy1:8080
+  
+  # User agent
+  useragent_suffix: ""
+  
+  # Request configuration
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+  pool_connections: 100
+  pool_maxsize: 100
+  enable_http2: true
+  retries: 3
+
+engines:
+  # Disabled engines (for privacy/security)
+  - name: google
+    disabled: false
+    
+  - name: duckduckgo
+    disabled: false
+    
+  - name: bing
+    disabled: true
+    
+  - name: baidu
+    disabled: false
+    
+  - name: wikipedia
+    disabled: false
+    
+  - name: wikidata
+    disabled: false
+    
+  - name: stackoverflow
+    disabled: false
+    
+  - name: github
+    disabled: false
+    
+  - name: gitlab
+    disabled: false
+    
+  - name: arxiv
+    disabled: false
+    
+  - name: pubmed
+    disabled: false
+
+plugins:
+  # Enabled plugins
+  - plugin: "Open Access DOI rewrite"
+    name: "oa_doi_rewrite"
+    enabled: true
+    
+  - plugin: "Vim-like hotkeys"
+    name: "vim_hotkeys"
+    enabled: true
+    
+  - plugin: "Self Informations"
+    name: "self_info"
+    enabled: true
+    
+  - plugin: "Tracker URL remover"
+    name: "tracker_url_remover"
+    enabled: true
+    
+  - plugin: "Ahmia blacklist"
+    name: "ahmia_filter"
+    enabled: true
+
+preferences:
+  # Lock preferences
+  lock:
+    - language
+    - autocomplete
+    - safesearch
+    - method
+
+enabled_plugins:
+  - "Open Access DOI rewrite"
+  - "Self Informations"
+  - "Tracker URL remover"
+  - "Ahmia blacklist"
+
+disabled_plugins:
+  - "Hostnames plugin"
+  - "Vim-like hotkeys"
+  - "Tor check plugin"
+
+locales:
+  en: English
+  zh: 简体中文
+  zh_TW: 繁體中文
+  ja: 日本語
+  ko: 한국어
+  de: Deutsch
+  fr: Français
+  es: Español
+
+categories:
+  general:
+    - google
+    - duckduckgo
+    - baidu
+    
+  images:
+    - google images
+    - bing images
+    - duckduckgo images
+    
+  news:
+    - google news
+    - bing news
+    - duckduckgo news
+    
+  videos:
+    - youtube
+    - dailymotion
+    - vimeo
+    
+  music:
+    - soundcloud
+    - bandcamp
+    - genius
+    
+  it:
+    - stackoverflow
+    - github
+    - gitlab
+    
+  science:
+    - wikipedia
+    - wikidata
+    - arxiv
+    - pubmed
+    - google scholar
+
+retrievers:
+  # Retrieval settings
+  google:
+    language: en
+    country: US
+    
+  duckduckgo:
+    language: en-US
