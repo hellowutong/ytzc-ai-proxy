@@ -15,15 +15,21 @@
 <style scoped>
 .skill-container {
   padding: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .page-header {
   margin-bottom: 20px;
-  
+
   h2 {
     margin: 0;
     font-size: 24px;
     color: #303133;
   }
+}
+
+:deep(.el-card) {
+  width: 100%;
 }
 </style>

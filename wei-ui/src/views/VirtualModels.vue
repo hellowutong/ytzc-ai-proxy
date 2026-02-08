@@ -323,11 +323,11 @@
               </el-table-column>
             </el-table>
 
-            <el-empty v-else description="暂无配置的知识库Skill" :image-size="60" />
+            <el-empty v-else description="暂无配置的知识库Skill" :image-size="60" style="margin: 10px 0; padding: 10px 0;" />
         </template>
 
         <!-- Web Search Config -->
-        <el-divider>联网搜索配置</el-divider>
+        <el-divider style="margin-top: 10px;">联网搜索配置</el-divider>
         
         <el-form-item label="启用搜索">
           <el-switch v-model="form.web_search.enabled" />
@@ -388,10 +388,10 @@
               </el-table-column>
             </el-table>
 
-            <el-empty v-else description="暂无配置的联网搜索Skill" :image-size="60" />
+            <el-empty v-else description="暂无配置的联网搜索Skill" :image-size="60" style="margin: 10px 0; padding: 10px 0;" />
 
             <!-- Search Targets -->
-            <el-divider />
+            <el-divider style="margin-top: 10px;" />
             <el-form-item label="搜索目标">
               <el-checkbox-group v-model="form.web_search.target">
                 <el-checkbox

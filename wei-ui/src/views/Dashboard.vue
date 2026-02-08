@@ -127,6 +127,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.dashboard {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .dashboard h2 {
   margin-bottom: 20px;
   color: #303133;
