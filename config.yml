@@ -1,13 +1,13 @@
 app:
-  host: 0.0.0.0
+  host: 127.0.0.1
   port: 8000
   debug: false
 storage:
   mongodb:
-    host: mongodb
+    host: mongo
     port: 27017
-    username: ai_gateway_user
-    password: user123
+    username: admin
+    password: password
     database: ai_gateway
   qdrant:
     host: qdrant
@@ -17,9 +17,9 @@ storage:
     host: redis
     port: 6379
 web_search:
-  - searxng
-  - LibreX
-  - 4get
+  searxng: null
+  LibreX: null
+  4get: null
 ai-gateway:
   router:
     force: small
@@ -39,21 +39,19 @@ ai-gateway:
         target: small
   virtual_models:
     demo1:
-      proxy_key: aaaaaa
-      base_url: http://localhost:8000/proxy/v1
-      current: small
+      proxy_key: xxxxxxxxxxxxxxxxxxxxx
+      base_url: http://192.168.1.100:8000/proxy/v1
+      current: big
       force-current: false
       use: true
       small:
         model: deepseek-ai/DeepSeek-R1-0528-Qwen3-8B
-        api_key: sk-dyxgnhjyiwvzxkefgdgvgjcrrbrehagxqmmwtavwsutpndyw
+        api_key: sk-1
         base_url: https://api.siliconflow.cn/v1
-        embedding_model: ''
       big:
         model: Pro/deepseek-ai/DeepSeek-V3.2
-        api_key: sk-dyxgnhjyiwvzxkefgdgvgjcrrbrehagxqmmwtavwsutpndyw
+        api_key: sk-1
         base_url: https://api.siliconflow.cn/v1
-        embedding_model: ''
       knowledge:
         enabled: true
         shared: true
@@ -61,18 +59,20 @@ ai-gateway:
           enabled: true
           version: v1
           custom:
-            enabled: false
-            version: v2
+            enable: false
+            version: v3
       web_search:
         enabled: true
         skill:
           enabled: true
           version: v1
           custom:
-            enabled: false
-            version: v2
-        target: []
-    demo2:
+            enable: false
+            version: v3
+        target:
+        - searxng: null
+      force_current: false
+    demo2-1:
       proxy_key: yyyyyyyyyyyyyyyyy
       base_url: http://192.168.1.100:8000/proxy/v1
       current: big
@@ -106,6 +106,7 @@ ai-gateway:
         target:
         - LibreX
         - 4get
+      force_current: false
   knowledge:
     threshold:
       extraction: 0.7

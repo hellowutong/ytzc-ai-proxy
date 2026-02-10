@@ -1,0 +1,95 @@
+{
+  "test_suite": "RSSFetcher",
+  "description": "RSS抓取器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_create_subscription",
+      "description": "测试创建RSS订阅",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "rss"],
+      "inputs": {
+        "name": "Test Feed",
+        "url": "https://example.com/feed.xml",
+        "virtual_model": "demo1"
+      },
+      "expected": {
+        "success": true,
+        "subscription_id": "uuid"
+      },
+      "assertions": [
+        "assert subscription_id is not None"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_fetch_feed",
+      "description": "测试抓取RSS订阅",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "rss"],
+      "inputs": {
+        "subscription_id": "test-sub-id"
+      },
+      "expected": {
+        "success": true,
+        "articles_fetched": 10
+      },
+      "assertions": [
+        "assert articles_fetched > 0"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_list_subscriptions",
+      "description": "测试列出RSS订阅",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "rss"],
+      "inputs": {},
+      "expected": {
+        "success": true,
+        "has_data": true
+      },
+      "assertions": [
+        "assert isinstance(subscriptions, list)"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_list_articles",
+      "description": "测试列出RSS文章",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "rss"],
+      "inputs": {
+        "subscription_id": "test-sub-id"
+      },
+      "expected": {
+        "success": true,
+        "has_data": true
+      },
+      "assertions": [
+        "assert isinstance(articles, list)"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_delete_subscription",
+      "description": "测试删除RSS订阅",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "rss"],
+      "inputs": {
+        "subscription_id": "test-sub-id"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    }
+  ]
+}

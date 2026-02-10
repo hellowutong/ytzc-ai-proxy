@@ -1,0 +1,48 @@
+{
+  "test_suite": "WebChat",
+  "description": "WebChat测试页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC007",
+      "name": "test_send_message",
+      "description": "测试发送消息",
+      "category": "e2e",
+      "priority": "P0",
+      "component": "WebChat",
+      "preconditions": ["WebChat页面已加载"],
+      "inputs": {
+        "message": "你好"
+      },
+      "actions": [
+        {"type": "fill", "target": ".chat-input textarea", "value": "你好"},
+        {"type": "click", "target": "button:contains('发送')"}
+      ],
+      "expected": {
+        "message_sent": true,
+        "response_received": true
+      },
+      "assertions": [
+        "expect(wrapper.text()).toContain('你好')"
+      ]
+    },
+    {
+      "id": "F-TC008",
+      "name": "test_switch_virtual_model",
+      "description": "测试切换虚拟模型",
+      "category": "component",
+      "priority": "P1",
+      "component": "WebChat",
+      "preconditions": ["有2个以上虚拟模型"],
+      "inputs": {},
+      "actions": [
+        {"type": "select", "target": ".model-selector", "value": "demo2"}
+      ],
+      "expected": {
+        "model_changed": true
+      },
+      "assertions": [
+        "expect(store.currentModel.name).toBe('demo2')"
+      ]
+    }
+  ]
+}

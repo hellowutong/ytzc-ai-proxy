@@ -1,0 +1,98 @@
+{
+  "test_suite": "ConfigManager",
+  "description": "配置管理器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_load_config_success",
+      "description": "测试成功加载配置文件",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "config"],
+      "inputs": {
+        "config_file": "./config.yml"
+      },
+      "expected": {
+        "config_loaded": true,
+        "has_app_config": true,
+        "has_storage_config": true
+      },
+      "assertions": [
+        "assert config is not None",
+        "assert 'app' in config",
+        "assert 'storage' in config"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_get_nested_value",
+      "description": "测试获取嵌套配置值",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "config"],
+      "inputs": {
+        "key": "ai-proxy.virtual_models.demo1.current",
+        "default": null
+      },
+      "expected": {
+        "value": "small"
+      },
+      "assertions": [
+        "assert value == 'small'"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_get_with_default",
+      "description": "测试获取不存在的配置时返回默认值",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["negative", "config"],
+      "inputs": {
+        "key": "nonexistent.key.path",
+        "default": "default_value"
+      },
+      "expected": {
+        "value": "default_value"
+      },
+      "assertions": [
+        "assert value == 'default_value'"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_set_config_value",
+      "description": "测试设置配置值",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "config"],
+      "inputs": {
+        "key": "test.value",
+        "value": "test_data"
+      },
+      "expected": {
+        "success": true,
+        "saved_value": "test_data"
+      },
+      "assertions": [
+        "assert success is True",
+        "assert config_manager.get('test.value') == 'test_data'"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_reload_config",
+      "description": "测试热重载配置",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "config"],
+      "inputs": {},
+      "expected": {
+        "reloaded": true
+      },
+      "assertions": [
+        "assert reloaded is True"
+      ]
+    }
+  ]
+}

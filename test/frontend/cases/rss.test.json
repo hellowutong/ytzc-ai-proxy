@@ -1,0 +1,31 @@
+{
+  "test_suite": "RSSManager",
+  "description": "RSS订阅管理页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC014",
+      "name": "test_add_subscription",
+      "description": "测试添加RSS订阅",
+      "category": "integration",
+      "priority": "P0",
+      "component": "RSS",
+      "preconditions": ["组件已挂载"],
+      "inputs": {
+        "name": "Test Feed",
+        "url": "https://example.com/feed.xml"
+      },
+      "actions": [
+        {"type": "click", "target": "button:contains('添加订阅')"},
+        {"type": "fill", "target": "input[name='name']", "value": "Test Feed"},
+        {"type": "fill", "target": "input[name='url']", "value": "https://example.com/feed.xml"},
+        {"type": "click", "target": "button[type='submit']"}
+      ],
+      "expected": {
+        "subscription_added": true
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalled()"
+      ]
+    }
+  ]
+}

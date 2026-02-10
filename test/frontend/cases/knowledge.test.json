@@ -1,0 +1,49 @@
+{
+  "test_suite": "KnowledgeManager",
+  "description": "知识库管理页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC011",
+      "name": "test_upload_document",
+      "description": "测试上传文档",
+      "category": "integration",
+      "priority": "P0",
+      "component": "Knowledge",
+      "preconditions": ["组件已挂载"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": "button:contains('上传文档')"},
+        {"type": "upload", "target": "input[type='file']", "file": "test.pdf"},
+        {"type": "click", "target": "button:contains('开始上传')"}
+      ],
+      "expected": {
+        "upload_started": true
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalled()"
+      ]
+    },
+    {
+      "id": "F-TC012",
+      "name": "test_search_knowledge",
+      "description": "测试知识库搜索",
+      "category": "integration",
+      "priority": "P0",
+      "component": "Knowledge",
+      "preconditions": ["知识库有数据"],
+      "inputs": {
+        "query": "测试查询"
+      },
+      "actions": [
+        {"type": "fill", "target": ".search-input", "value": "测试查询"},
+        {"type": "click", "target": "button:contains('搜索')"}
+      ],
+      "expected": {
+        "results_displayed": true
+      },
+      "assertions": [
+        "expect(wrapper.find('.search-results')).toBeVisible()"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "test_suite": "SkillManager",
+  "description": "Skill管理器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_load_all_skills",
+      "description": "测试加载所有Skill",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "skill"],
+      "inputs": {},
+      "expected": {
+        "skills_loaded": true,
+        "skill_count": 10
+      },
+      "assertions": [
+        "assert len(skill_manager._skills) > 0"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_get_skill",
+      "description": "测试获取特定Skill",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "skill"],
+      "inputs": {
+        "category": "router",
+        "name": "关键词路由"
+      },
+      "expected": {
+        "skill_found": true,
+        "skill_type": "rule-based"
+      },
+      "assertions": [
+        "assert skill is not None",
+        "assert skill.metadata.type == 'rule-based'"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_execute_skill",
+      "description": "测试执行Skill",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "skill"],
+      "inputs": {
+        "category": "router",
+        "name": "关键词路由",
+        "params": {
+          "user_input": "你好"
+        }
+      },
+      "expected": {
+        "success": true,
+        "has_result": true
+      },
+      "assertions": [
+        "assert 'target' in result"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_skill_not_found",
+      "description": "测试获取不存在的Skill",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["negative", "skill"],
+      "inputs": {
+        "category": "nonexistent",
+        "name": "nonexistent"
+      },
+      "expected": {
+        "skill_found": false,
+        "raises_exception": true
+      },
+      "assertions": [
+        "assert skill is None"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_reload_skill",
+      "description": "测试重载Skill",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "skill"],
+      "inputs": {
+        "category": "router",
+        "name": "关键词路由"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    }
+  ]
+}

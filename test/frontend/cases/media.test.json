@@ -1,0 +1,26 @@
+{
+  "test_suite": "MediaManager",
+  "description": "媒体管理页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC013",
+      "name": "test_upload_video",
+      "description": "测试上传视频",
+      "category": "integration",
+      "priority": "P0",
+      "component": "Media",
+      "preconditions": ["在视频标签页"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": "button:contains('上传视频')"},
+        {"type": "upload", "target": "input[type='file']", "file": "test.mp4"}
+      ],
+      "expected": {
+        "upload_started": true
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalled()"
+      ]
+    }
+  ]
+}

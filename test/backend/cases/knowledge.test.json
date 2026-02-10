@@ -1,0 +1,100 @@
+{
+  "test_suite": "KnowledgeManager",
+  "description": "知识库管理器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_upload_document",
+      "description": "测试上传文档",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "knowledge"],
+      "inputs": {
+        "filename": "test.pdf",
+        "virtual_model": "demo1",
+        "is_shared": true
+      },
+      "expected": {
+        "success": true,
+        "document_created": true
+      },
+      "assertions": [
+        "assert document_id is not None"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_vectorize_document",
+      "description": "测试文档向量化",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "knowledge"],
+      "inputs": {
+        "document_id": "test-doc-id"
+      },
+      "expected": {
+        "success": true,
+        "vectorized": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_search_knowledge",
+      "description": "测试知识库搜索",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "knowledge"],
+      "inputs": {
+        "query": "测试查询",
+        "virtual_model": "demo1",
+        "top_k": 5
+      },
+      "expected": {
+        "has_results": true,
+        "results_count": 5
+      },
+      "assertions": [
+        "assert isinstance(results, list)",
+        "assert len(results) <= 5"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_extract_knowledge",
+      "description": "测试知识提取",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "knowledge"],
+      "inputs": {
+        "text": "这是测试文本内容",
+        "virtual_model": "demo1"
+      },
+      "expected": {
+        "has_chunks": true
+      },
+      "assertions": [
+        "assert isinstance(chunks, list)"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_delete_document",
+      "description": "测试删除文档",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "knowledge"],
+      "inputs": {
+        "document_id": "test-doc-id"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    }
+  ]
+}

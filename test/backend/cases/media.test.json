@@ -1,0 +1,99 @@
+{
+  "test_suite": "MediaProcessor",
+  "description": "媒体处理器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_upload_audio",
+      "description": "测试上传音频文件",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "media"],
+      "inputs": {
+        "filename": "test.mp3",
+        "media_type": "audio",
+        "auto_transcribe": true
+      },
+      "expected": {
+        "success": true,
+        "media_id": "uuid"
+      },
+      "assertions": [
+        "assert media_id is not None"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_upload_video",
+      "description": "测试上传视频文件",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "media"],
+      "inputs": {
+        "filename": "test.mp4",
+        "media_type": "video",
+        "auto_transcribe": false
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert media_id is not None"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_process_transcription",
+      "description": "测试处理转录任务",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "media"],
+      "inputs": {
+        "media_id": "test-media-id"
+      },
+      "expected": {
+        "success": true,
+        "has_transcription": true
+      },
+      "assertions": [
+        "assert 'text' in transcription"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_get_media_status",
+      "description": "测试获取媒体状态",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "media"],
+      "inputs": {
+        "media_id": "test-media-id"
+      },
+      "expected": {
+        "found": true,
+        "has_status": true
+      },
+      "assertions": [
+        "assert media is not None",
+        "assert 'status' in media"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_delete_media",
+      "description": "测试删除媒体文件",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "media"],
+      "inputs": {
+        "media_id": "test-media-id"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    }
+  ]
+}

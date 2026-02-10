@@ -1,0 +1,1223 @@
+{
+  "_description": "AI网关系统 - 前后端统一Mock数据（完整测试覆盖版）",
+  "_version": "2.0",
+  "_last_updated": "2026-02-09",
+  "_usage": "前后端开发测试统一使用此文件，确保数据一致性",
+  "_test_coverage": {
+    "normal": "正常数据场景",
+    "boundary": "边界测试数据（空值、极值、超长文本等）",
+    "error": "异常/错误数据（验证失败、服务器错误等）"
+  },
+  
+  "dashboard": {
+    "stats": {
+      "virtual_models": {
+        "total": 5,
+        "active": 4
+      },
+      "conversations_today": 128,
+      "knowledge_documents": 1024,
+      "media_queue": {
+        "pending": 3,
+        "processing": 2,
+        "completed": 150
+      },
+      "rss_subscriptions": {
+        "total": 10,
+        "active": 8
+      },
+      "timestamp": "2026-02-09T14:30:00Z"
+    },
+    "health": {
+      "status": "healthy",
+      "services": {
+        "mongodb": {
+          "status": "healthy",
+          "latency_ms": 5,
+          "last_check": "2026-02-09T14:30:00Z"
+        },
+        "redis": {
+          "status": "healthy",
+          "latency_ms": 2,
+          "last_check": "2026-02-09T14:30:00Z"
+        },
+        "qdrant": {
+          "status": "healthy",
+          "latency_ms": 8,
+          "last_check": "2026-02-09T14:30:00Z"
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "act_001",
+        "timestamp": "2026-02-09T14:25:00Z",
+        "type": "config",
+        "action": "更新虚拟模型配置",
+        "details": {"model_name": "demo1"},
+        "status": "success"
+      },
+      {
+        "id": "act_002",
+        "timestamp": "2026-02-09T14:20:00Z",
+        "type": "skill",
+        "action": "重载Skill",
+        "details": {"skill_category": "router"},
+        "status": "success"
+      },
+      {
+        "id": "act_003",
+        "timestamp": "2026-02-09T14:15:00Z",
+        "type": "model",
+        "action": "创建虚拟模型",
+        "details": {"model_name": "demo5"},
+        "status": "success"
+      }
+    ]
+  },
+
+  "config": {
+    "current": {
+      "config": "app:\n  host: \"127.0.0.1\"\n  port: 8000\n  debug: false\n\nstorage:\n  mongodb:\n    host: \"mongo\"\n    port: 27017\n    username: \"admin\"\n    password: \"password\"\n    database: \"ai_gateway\"\n  qdrant:\n    host: \"qdrant\"\n    port: 6333\n    collection: \"knowledge_base\"\n  redis:\n    host: \"redis\"\n    port: 6379\n\nai-gateway:\n  router:\n    force: small\n    enable-force: true\n    skill:\n      enabled: true\n      version: \"v1\"\n      custom:\n        enabled: true\n        version: \"v2\"\n    keywords:\n      enable: true\n      rules:\n        - pattern: \"@大哥\"\n          target: big\n        - pattern: \"@小弟\"\n          target: small\n  ",
+      "format": "yaml",
+      "last_modified": "2026-02-09T10:00:00Z",
+      "is_valid": true
+    },
+    "template": {
+      "config": "app:\n  host: \"127.0.0.1\"\n  port: 8000\n  debug: false\n\nstorage:\n  mongodb:\n    host: \"mongo\"\n    port: 27017\n    username: \"admin\"\n    password: \"password\"\n    database: \"ai_gateway\"\n  qdrant:\n    host: \"qdrant\"\n    port: 6333\n    collection: \"knowledge_base\"\n  redis:\n    host: \"redis\"\n    port: 6379\n"
+    }
+  },
+
+  "virtual_models": {
+    "list": {
+      "models": [
+        {
+          "name": "demo1",
+          "proxy_key_masked": "sk-xxx...abc",
+          "proxy_key_full": "sk-xxxxxxxxxxxxxxxx",
+          "base_url": "http://192.168.1.100:8000/proxy/v1",
+          "current": "small",
+          "force_current": false,
+          "use": true,
+          "small": {
+            "model": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+            "api_key": "sk-siliconflow-xxxxx",
+            "base_url": "https://api.siliconflow.cn/v1"
+          },
+          "big": {
+            "model": "Pro/deepseek-ai/DeepSeek-V3.2",
+            "api_key": "sk-siliconflow-yyyyy",
+            "base_url": "https://api.siliconflow.cn/v1"
+          },
+          "knowledge": {
+            "enabled": true,
+            "shared": true,
+            "skill": {"enabled": true, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"}
+          },
+          "web_search": {
+            "enabled": true,
+            "skill": {"enabled": true, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"},
+            "target": ["searxng"]
+          }
+        },
+        {
+          "name": "demo2",
+          "proxy_key_masked": "sk-yyy...def",
+          "proxy_key_full": "sk-yyyyyyyyyyyyyyyy",
+          "base_url": "http://192.168.1.100:8000/proxy/v1",
+          "current": "big",
+          "force_current": false,
+          "use": true,
+          "small": {
+            "model": "ollama/qwen2.5:7b",
+            "api_key": "",
+            "base_url": "http://localhost:11434/v1",
+            "embedding_model": "nomic-embed-text"
+          },
+          "big": {
+            "model": "openai/gpt-4o",
+            "api_key": "sk-openai-xxxxx",
+            "base_url": "https://api.openai.com/v1"
+          },
+          "knowledge": {
+            "enabled": true,
+            "shared": true,
+            "skill": {"enabled": true, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"}
+          },
+          "web_search": {
+            "enabled": true,
+            "skill": {"enabled": true, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"},
+            "target": ["LibreX", "4get"]
+          }
+        },
+        {
+          "name": "demo3",
+          "proxy_key_masked": "sk-zzz...ghi",
+          "proxy_key_full": "sk-zzzzzzzzzzzzzzzzz",
+          "base_url": "http://192.168.1.100:8000/proxy/v1",
+          "current": "small",
+          "force_current": true,
+          "use": false,
+          "small": {
+            "model": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+            "api_key": "sk-test-xxxxx",
+            "base_url": "https://api.siliconflow.cn/v1"
+          },
+          "big": {
+            "model": "Pro/deepseek-ai/DeepSeek-V3.2",
+            "api_key": "sk-test-yyyyy",
+            "base_url": "https://api.siliconflow.cn/v1"
+          },
+          "knowledge": {
+            "enabled": false,
+            "shared": false,
+            "skill": {"enabled": false, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"}
+          },
+          "web_search": {
+            "enabled": false,
+            "skill": {"enabled": false, "version": "v1"},
+            "skill_custom": {"enabled": false, "version": "v3"},
+            "target": []
+          }
+        }
+      ]
+    },
+    "create_request": {
+      "name": "demo4",
+      "proxy_key": "sk-newkey123456789",
+      "base_url": "http://192.168.1.100:8000/proxy/v1",
+      "current": "small",
+      "force_current": false,
+      "use": true,
+      "small": {
+        "model": "ollama/qwen2.5:7b",
+        "api_key": "",
+        "base_url": "http://localhost:11434/v1",
+        "embedding_model": "nomic-embed-text"
+      },
+      "big": {
+        "model": "openai/gpt-4o",
+        "api_key": "sk-openai-newkey",
+        "base_url": "https://api.openai.com/v1"
+      },
+      "knowledge": {
+        "enabled": true,
+        "shared": true,
+        "skill": {"enabled": true, "version": "v1"},
+        "skill_custom": {"enabled": false, "version": "v3"}
+      },
+      "web_search": {
+        "enabled": true,
+        "skill": {"enabled": true, "version": "v1"},
+        "skill_custom": {"enabled": false, "version": "v3"},
+        "target": ["searxng", "LibreX"]
+      }
+    },
+    "create_response": {
+      "success": true,
+      "message": "虚拟模型已创建",
+      "model": {
+        "name": "demo4",
+        "proxy_key_masked": "sk-new...789"
+      }
+    },
+    "test_connection_response": {
+      "success": true,
+      "message": "连接成功",
+      "latency_ms": 150,
+      "model_info": {
+        "id": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+        "context_window": 8192
+      }
+    }
+  },
+
+  "skills": {
+    "list": {
+      "categories": [
+        {
+          "name": "router",
+          "display_name": "模型路由",
+          "skills": [
+            {
+              "name": "关键词路由",
+              "version": "v1",
+              "type": "rule-based",
+              "system": {"enabled": true, "version": "v1"},
+              "custom": {"enabled": false, "version": "v2"}
+            },
+            {
+              "name": "意图识别",
+              "version": "v1",
+              "type": "llm-based",
+              "system": {"enabled": true, "version": "v1"},
+              "custom": {"enabled": true, "version": "v2"}
+            }
+          ]
+        },
+        {
+          "name": "knowledge",
+          "display_name": "知识提取",
+          "skills": [
+            {
+              "name": "简单提取",
+              "version": "v1",
+              "type": "llm-based",
+              "system": {"enabled": true, "version": "v1"},
+              "custom": {"enabled": true, "version": "v2"}
+            },
+            {
+              "name": "主题分类",
+              "version": "v1",
+              "type": "rule-based",
+              "system": {"enabled": true, "version": "v1"},
+              "custom": {"enabled": true, "version": "v2"}
+            }
+          ]
+        }
+      ]
+    },
+    "detail": {
+      "name": "意图识别",
+      "category": "router",
+      "description": "基于LLM意图识别的模型路由",
+      "type": "llm-based",
+      "system": {
+        "enabled": true,
+        "version": "v1",
+        "path": "./skill/system/router/v1/意图识别",
+        "has_custom": true
+      },
+      "custom": {
+        "enabled": true,
+        "version": "v2",
+        "path": "./skill/custom/router/v2/意图识别",
+        "content": "---\nname: 意图识别\ndescription: 基于LLM意图识别的模型路由\ntype: llm-based\npriority: 2\nversion: \"1.0.0\"\ninput_schema:\n  type: object\n  properties:\n    user_input:\n      type: string\n    context:\n      type: string\noutput_schema:\n  type: object\n  properties:\n    model_type:\n      type: string\n      enum: [small, big]\n    confidence:\n      type: number\n    reason:\n      type: string\n---"
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "user_input": {"type": "string"},
+          "context": {"type": "string"}
+        },
+        "required": ["user_input"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "model_type": {"type": "string", "enum": ["small", "big"]},
+          "confidence": {"type": "number"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "execution_logs": {
+      "logs": [
+        {
+          "timestamp": "2026-02-09T14:30:00Z",
+          "skill_category": "router",
+          "skill_name": "意图识别",
+          "skill_version": "v1",
+          "input": {"user_input": "你好"},
+          "output": {"model_type": "small", "confidence": 0.95, "reason": "简单问候"},
+          "duration_ms": 120,
+          "status": "success"
+        },
+        {
+          "timestamp": "2026-02-09T14:29:00Z",
+          "skill_category": "knowledge",
+          "skill_name": "简单提取",
+          "skill_version": "v1",
+          "input": {"text": "这是一个很长的文本..."},
+          "output": {"chunks": 3},
+          "duration_ms": 500,
+          "status": "success"
+        }
+      ],
+      "total": 150
+    },
+    "stats": {
+      "stats": [
+        {
+          "category": "router",
+          "name": "意图识别",
+          "total_calls": 1024,
+          "success_rate": 0.98,
+          "avg_duration_ms": 150
+        },
+        {
+          "category": "knowledge",
+          "name": "简单提取",
+          "total_calls": 512,
+          "success_rate": 0.95,
+          "avg_duration_ms": 300
+        }
+      ]
+    }
+  },
+
+  "conversations": {
+    "list": {
+      "conversations": [
+        {
+          "id": "conv_001",
+          "model": "demo1",
+          "message_count": 10,
+          "last_message_time": "2026-02-09T14:30:00Z",
+          "preview": "用户: 你好\nAI: 你好！..."
+        },
+        {
+          "id": "conv_002",
+          "model": "demo2",
+          "message_count": 25,
+          "last_message_time": "2026-02-09T14:00:00Z",
+          "preview": "用户: 帮我写一段Python代码\nAI: 好的，这是Python代码..."
+        },
+        {
+          "id": "conv_003",
+          "model": "demo1",
+          "message_count": 5,
+          "last_message_time": "2026-02-09T13:30:00Z",
+          "preview": "用户: 谢谢\nAI: 不客气！..."
+        }
+      ],
+      "total": 150,
+      "limit": 20,
+      "offset": 0
+    },
+    "detail": {
+      "id": "conv_001",
+      "model": "demo1",
+      "created_at": "2026-02-09T14:00:00Z",
+      "updated_at": "2026-02-09T14:30:00Z",
+      "messages": [
+        {
+          "role": "user",
+          "content": "你好",
+          "timestamp": "2026-02-09T14:00:05Z",
+          "metadata": {}
+        },
+        {
+          "role": "assistant",
+          "content": "你好！我是AI助手，很高兴为您服务。",
+          "timestamp": "2026-02-09T14:00:08Z",
+          "metadata": {
+            "model_used": "small",
+            "knowledge_references": [],
+            "routing_decision": {
+              "model_type": "small",
+              "reason": "简单问候"
+            }
+          }
+        },
+        {
+          "role": "user",
+          "content": "请帮我写一段Python代码，实现快速排序",
+          "timestamp": "2026-02-09T14:05:00Z",
+          "metadata": {}
+        },
+        {
+          "role": "assistant",
+          "content": "```python\ndef quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + middle + quicksort(right)\n```",
+          "timestamp": "2026-02-09T14:05:10Z",
+          "metadata": {
+            "model_used": "big",
+            "knowledge_references": [],
+            "routing_decision": {
+              "from": "small",
+              "to": "big",
+              "reason": "代码相关请求"
+            }
+          }
+        }
+      ]
+    }
+  },
+
+  "knowledge": {
+    "documents_list": {
+      "documents": [
+        {
+          "id": "doc_001",
+          "filename": "设计文档.pdf",
+          "type": "pdf",
+          "source": "upload",
+          "virtual_model": "demo1",
+          "is_shared": true,
+          "vectorized": true,
+          "chunk_count": 5,
+          "upload_time": "2026-02-09T10:00:00Z",
+          "size_bytes": 1024000
+        },
+        {
+          "id": "doc_002",
+          "filename": "技术规范.md",
+          "type": "txt",
+          "source": "upload",
+          "virtual_model": "demo1",
+          "is_shared": true,
+          "vectorized": true,
+          "chunk_count": 3,
+          "upload_time": "2026-02-09T09:00:00Z",
+          "size_bytes": 51200
+        },
+        {
+          "id": "doc_003",
+          "filename": "会议记录.jpg",
+          "type": "jpg",
+          "source": "conversation",
+          "virtual_model": "demo1",
+          "is_shared": false,
+          "vectorized": false,
+          "chunk_count": 0,
+          "upload_time": "2026-02-09T08:00:00Z",
+          "size_bytes": 2048000
+        }
+      ],
+      "total": 100
+    },
+    "config": {
+      "embedding": {
+        "model": "BAAI/bge-m3",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "api_key": "sk-xxx"
+      },
+      "scheduler": {
+        "cron": "*/30 * * * *",
+        "enabled": false
+      },
+      "skills": {
+        "extraction": {
+          "system": {"enabled": true, "version": "v1"},
+          "custom": {"enabled": true, "version": "v2"}
+        },
+        "topics": {
+          "system": {"enabled": true, "version": "v1"},
+          "custom": {"enabled": true, "version": "v2"}
+        }
+      },
+      "topics": {
+        "auto_classify": [
+          {"topic": "项目架构", "patterns": ["架构", "设计", "结构"]},
+          {"topic": "用户偏好", "patterns": ["我喜欢", "偏好"]},
+          {"topic": "开发规范", "patterns": ["规范", "必须", "禁止"]}
+        ],
+        "self_classify": [
+          {"topic": "股票情绪", "patterns": ["股票", "热度"]}
+        ]
+      }
+    },
+    "search_result": {
+      "results": [
+        {
+          "document_id": "doc_001",
+          "chunk_index": 0,
+          "content": "项目采用微服务架构，使用FastAPI作为后端框架...",
+          "score": 0.89,
+          "metadata": {"filename": "设计文档.pdf"}
+        },
+        {
+          "document_id": "doc_002",
+          "chunk_index": 1,
+          "content": "API设计遵循RESTful规范，使用OpenAPI文档...",
+          "score": 0.85,
+          "metadata": {"filename": "技术规范.md"}
+        }
+      ]
+    }
+  },
+
+  "media": {
+    "video_list": {
+      "items": [
+        {
+          "id": "media_001",
+          "filename": "产品介绍.mp4",
+          "type": "video",
+          "status": "completed",
+          "size_bytes": 52428800,
+          "transcription": {
+            "processor": "whisper",
+            "model": "base",
+            "language": "zh",
+            "text_length": 1500,
+            "completed_at": "2026-02-09T14:30:00Z"
+          },
+          "progress": 100,
+          "upload_time": "2026-02-09T14:00:00Z"
+        },
+        {
+          "id": "media_002",
+          "filename": "会议录像.avi",
+          "type": "video",
+          "status": "processing",
+          "size_bytes": 104857600,
+          "transcription": null,
+          "progress": 45,
+          "upload_time": "2026-02-09T13:00:00Z"
+        }
+      ],
+      "total": 50
+    },
+    "audio_list": {
+      "items": [
+        {
+          "id": "media_003",
+          "filename": "会议录音.mp3",
+          "type": "audio",
+          "status": "completed",
+          "size_bytes": 5242880,
+          "transcription": {
+            "processor": "whisper",
+            "model": "base",
+            "language": "zh",
+            "text_length": 1500,
+            "completed_at": "2026-02-09T14:30:00Z"
+          },
+          "progress": 100,
+          "upload_time": "2026-02-09T14:00:00Z"
+        }
+      ],
+      "total": 30
+    }
+  },
+
+  "rss": {
+    "subscriptions_list": {
+      "subscriptions": [
+        {
+          "id": "rss_001",
+          "name": "AI新闻",
+          "url": "https://news.ai.com/feed.xml",
+          "enabled": true,
+          "fetch_interval": 30,
+          "retention_days": 30,
+          "default_permanent": false,
+          "virtual_model": "demo1",
+          "article_count": 150,
+          "last_fetch_time": "2026-02-09T14:00:00Z",
+          "created_at": "2026-01-01T00:00:00Z"
+        },
+        {
+          "id": "rss_002",
+          "name": "技术博客",
+          "url": "https://blog.example.com/feed.xml",
+          "enabled": true,
+          "fetch_interval": 60,
+          "retention_days": 30,
+          "default_permanent": false,
+          "virtual_model": "demo1",
+          "article_count": 80,
+          "last_fetch_time": "2026-02-09T13:00:00Z",
+          "created_at": "2026-01-15T00:00:00Z"
+        }
+      ],
+      "total": 10
+    },
+    "articles_list": {
+      "articles": [
+        {
+          "id": "article_001",
+          "subscription_id": "rss_001",
+          "title": "AI最新进展：GPT-5即将发布",
+          "url": "https://news.ai.com/article/1",
+          "content": "OpenAI宣布将在下个月发布GPT-5模型，性能将比GPT-4提升10倍...",
+          "summary": "GPT-5即将发布",
+          "published_at": "2026-02-09T10:00:00Z",
+          "fetched_at": "2026-02-09T14:00:00Z",
+          "is_read": false,
+          "knowledge_extracted": true,
+          "fetch_status": "full_content"
+        },
+        {
+          "id": "article_002",
+          "subscription_id": "rss_001",
+          "title": "机器学习新算法突破",
+          "url": "https://news.ai.com/article/2",
+          "content": "研究人员开发出新型的神经网络架构...",
+          "summary": "新算法突破",
+          "published_at": "2026-02-09T08:00:00Z",
+          "fetched_at": "2026-02-09T14:00:00Z",
+          "is_read": true,
+          "knowledge_extracted": true,
+          "fetch_status": "full_content"
+        }
+      ],
+      "total": 150
+    }
+  },
+
+  "logs": {
+    "system_logs": {
+      "logs": [
+        {
+          "timestamp": "2026-02-09T14:30:00Z",
+          "level": "INFO",
+          "module": "skill.executor",
+          "message": "Skill执行成功: router/意图识别",
+          "context": {"duration_ms": 120}
+        },
+        {
+          "timestamp": "2026-02-09T14:29:00Z",
+          "level": "WARNING",
+          "module": "config.manager",
+          "message": "配置热重载完成",
+          "context": {}
+        },
+        {
+          "timestamp": "2026-02-09T14:28:00Z",
+          "level": "ERROR",
+          "module": "api.proxy",
+          "message": "API调用失败: Connection timeout",
+          "context": {"model": "demo1"}
+        }
+      ],
+      "total": 1000
+    },
+    "operation_logs": {
+      "logs": [
+        {
+          "id": "op_001",
+          "timestamp": "2026-02-09T14:30:00Z",
+          "type": "config",
+          "action": "更新虚拟模型配置",
+          "details": {"model_name": "demo1", "changes": ["current: small -> big"]},
+          "status": "success",
+          "operator": "admin"
+        },
+        {
+          "id": "op_002",
+          "timestamp": "2026-02-09T14:25:00Z",
+          "type": "skill",
+          "action": "重载Skill",
+          "details": {"skill_category": "router"},
+          "status": "success",
+          "operator": "admin"
+        }
+      ],
+      "total": 500
+    },
+    "skill_logs": {
+      "logs": [
+        {
+          "log_id": "skill_001",
+          "timestamp": "2026-02-09T14:30:00Z",
+          "skill_category": "router",
+          "skill_name": "意图识别",
+          "skill_version": "v1",
+          "input": {"user_input": "你好"},
+          "output": {"model_type": "small", "confidence": 0.95},
+          "duration_ms": 120,
+          "status": "success",
+          "llm_model": "gpt-3.5-turbo",
+          "llm_tokens_input": 50,
+          "llm_tokens_output": 20
+        }
+      ],
+      "total": 2000
+    }
+  },
+
+  "raw_data": {
+    "conversations": {
+      "records": [
+        {
+          "timestamp": "2026-02-09T14:30:00Z",
+          "type": "user_input",
+          "conversation_id": "conv_001",
+          "model": "demo1",
+          "data": {"content": "你好", "metadata": {}}
+        },
+        {
+          "timestamp": "2026-02-09T14:30:05Z",
+          "type": "ai_response",
+          "conversation_id": "conv_001",
+          "model": "demo1",
+          "data": {"content": "你好！", "model_used": "small", "knowledge_refs": []}
+        },
+        {
+          "timestamp": "2026-02-09T14:30:05Z",
+          "type": "routing_decision",
+          "conversation_id": "conv_001",
+          "data": {"from": "small", "to": "big", "reason": "复杂问题"}
+        }
+      ]
+    },
+    "media": {
+      "records": [
+        {
+          "id": "media_001",
+          "type": "audio",
+          "filename": "录音.mp3",
+          "raw_transcription": {
+            "text": "完整转录文本内容...",
+            "segments": [
+              {"start": 0, "end": 10, "text": "第一段"},
+              {"start": 10, "end": 20, "text": "第二段"}
+            ],
+            "language": "zh"
+          },
+          "knowledge_extraction": {
+            "extracted": true,
+            "chunks": [{"id": "chunk_001", "content": "..."}],
+            "stored_in_qdrant": true
+          }
+        }
+      ]
+    }
+  },
+
+  "chat": {
+    "completions_request": {
+      "model": "demo1",
+      "messages": [
+        {"role": "system", "content": "你是AI助手"},
+        {"role": "user", "content": "你好"}
+      ],
+      "stream": true,
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "completions_response": {
+      "id": "chatcmpl-abc123",
+      "object": "chat.completion",
+      "created": 1704067200,
+      "model": "demo1",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "你好！我是AI助手，很高兴为您服务。"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30
+      }
+    },
+    "models_list": {
+      "object": "list",
+      "data": [
+        {"id": "demo1", "object": "model", "created": 1704067200, "owned_by": "ai-gateway"},
+        {"id": "demo2", "object": "model", "created": 1704067200, "owned_by": "ai-gateway"}
+      ]
+    }
+  },
+
+  "_test_scenarios": {
+    "description": "边界测试和异常测试数据集合",
+    
+    "boundary_tests": {
+      "description": "边界值测试数据",
+      
+      "empty_values": {
+        "description": "空值测试",
+        "empty_string": "",
+        "empty_array": [],
+        "empty_object": {},
+        "null_value": null,
+        "whitespace_only": "   ",
+        "zero": 0,
+        "false_value": false
+      },
+      
+      "extreme_lengths": {
+        "description": "极值长度测试",
+        "very_short": {
+          "single_char": "a",
+          "two_chars": "ab"
+        },
+        "very_long": {
+          "string_100_chars": "a" * 100,
+          "string_1000_chars": "a" * 1000,
+          "string_10000_chars": "a" * 10000,
+          "string_100000_chars": "a" * 100000
+        },
+        "array_limits": {
+          "empty_array": [],
+          "single_item": ["item"],
+          "max_items_100": [f"item_{i}" for i in range(100)],
+          "max_items_1000": [f"item_{i}" for i in range(1000)]
+        }
+      },
+      
+      "special_characters": {
+        "description": "特殊字符测试",
+        "unicode": {
+          "chinese": "你好世界",
+          "japanese": "こんにちは",
+          "korean": "안녕하세요",
+          "arabic": "مرحبا",
+          "russian": "Привет",
+          "emoji": "👋🌍🎉💻🔥"
+        },
+        "dangerous": {
+          "xss_attempt": "<script>alert('xss')</script>",
+          "sql_injection": "'; DROP TABLE users; --",
+          "html_tags": "<div>content</div><p>paragraph</p>",
+          "javascript": "javascript:alert('test')",
+          "newline_chars": "line1\nline2\r\nline3\t",
+          "backslash": "path\\to\\file",
+          "quotes": "He said 'hello' and \"goodbye\""
+        },
+        "control_chars": {
+          "null_byte": "\x00",
+          "bell": "\x07",
+          "escape": "\x1b",
+          "delete": "\x7f"
+        }
+      },
+      
+      "numeric_boundaries": {
+        "description": "数值边界测试",
+        "integers": {
+          "min_int": -2147483648,
+          "max_int": 2147483647,
+          "zero": 0,
+          "negative": -1,
+          "positive": 1,
+          "large_positive": 999999999,
+          "large_negative": -999999999
+        },
+        "floats": {
+          "min_float": -1.7976931348623157e+308,
+          "max_float": 1.7976931348623157e+308,
+          "zero": 0.0,
+          "very_small": 1e-308,
+          "pi": 3.141592653589793,
+          "scientific": 1.23e+10
+        }
+      },
+      
+      "date_time_boundaries": {
+        "description": "日期时间边界",
+        "epoch": "1970-01-01T00:00:00Z",
+        "min_date": "0001-01-01T00:00:00Z",
+        "max_date": "9999-12-31T23:59:59Z",
+        "leap_year": "2024-02-29T12:00:00Z",
+        "timezone_edge": "2026-02-09T23:59:59+23:59"
+      },
+      
+      "config_boundary": {
+        "description": "配置边界测试",
+        "deep_nesting": {
+          "level1": {
+            "level2": {
+              "level3": {
+                "level4": {
+                  "level5": {
+                    "value": "deep"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "large_config": {
+          "many_keys": {f"key_{i}": f"value_{i}" for i in range(100)}
+        }
+      }
+    },
+    
+    "error_responses": {
+      "description": "异常和错误响应数据",
+      
+      "http_errors": {
+        "400_bad_request": {
+          "status_code": 400,
+          "error": {
+            "code": "BAD_REQUEST",
+            "message": "请求参数格式错误",
+            "details": {
+              "field": "model_name",
+              "issue": "字段不能为空"
+            }
+          }
+        },
+        "401_unauthorized": {
+          "status_code": 401,
+          "error": {
+            "code": "UNAUTHORIZED",
+            "message": "Proxy Key无效或已过期",
+            "type": "authentication_error"
+          }
+        },
+        "403_forbidden": {
+          "status_code": 403,
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "无权访问此资源",
+            "reason": "模型已被禁用"
+          }
+        },
+        "404_not_found": {
+          "status_code": 404,
+          "error": {
+            "code": "NOT_FOUND",
+            "message": "请求的资源不存在",
+            "resource": "virtual_model",
+            "id": "demo999"
+          }
+        },
+        "422_validation_error": {
+          "status_code": 422,
+          "error": {
+            "code": "VALIDATION_ERROR",
+            "message": "数据验证失败",
+            "validation_errors": [
+              {"field": "name", "message": "名称不能为空", "code": "required"},
+              {"field": "proxy_key", "message": "长度必须在32-64之间", "code": "length"},
+              {"field": "base_url", "message": "必须是有效的URL", "code": "url"}
+            ]
+          }
+        },
+        "429_rate_limit": {
+          "status_code": 429,
+          "error": {
+            "code": "RATE_LIMIT_EXCEEDED",
+            "message": "请求频率超限",
+            "retry_after": 60
+          }
+        },
+        "500_internal_error": {
+          "status_code": 500,
+          "error": {
+            "code": "INTERNAL_SERVER_ERROR",
+            "message": "服务器内部错误",
+            "request_id": "req_abc123"
+          }
+        },
+        "502_bad_gateway": {
+          "status_code": 502,
+          "error": {
+            "code": "BAD_GATEWAY",
+            "message": "上游服务不可用",
+            "upstream": "siliconflow-api"
+          }
+        },
+        "503_service_unavailable": {
+          "status_code": 503,
+          "error": {
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "服务暂时不可用",
+            "retry_after": 300
+          }
+        },
+        "504_gateway_timeout": {
+          "status_code": 504,
+          "error": {
+            "code": "GATEWAY_TIMEOUT",
+            "message": "请求上游服务超时"
+          }
+        }
+      },
+      
+      "business_errors": {
+        "skill_validation_failed": {
+          "error": {
+            "code": "SKILL_VALIDATION_ERROR",
+            "message": "Skill验证失败",
+            "details": {
+              "skill": "router/关键词路由",
+              "issues": [
+                "缺少必需的input_schema",
+                "output_schema格式不正确"
+              ]
+            }
+          }
+        },
+        "skill_execution_failed": {
+          "error": {
+            "code": "SKILL_EXECUTION_ERROR",
+            "message": "Skill执行异常",
+            "details": {
+              "skill": "knowledge/简单提取",
+              "input": {"text": "..."},
+              "error": "调用LLM API超时",
+              "duration_ms": 30000
+            }
+          }
+        },
+        "config_validation_failed": {
+          "error": {
+            "code": "CONFIG_VALIDATION_ERROR",
+            "message": "配置验证失败",
+            "validation_errors": [
+              {"path": "ai-gateway.virtual_models.demo1.small.api_key", "message": "不能为空"},
+              {"path": "storage.mongodb.port", "message": "必须在1-65535之间"}
+            ]
+          }
+        },
+        "model_not_found": {
+          "error": {
+            "code": "MODEL_NOT_FOUND",
+            "message": "虚拟模型不存在",
+            "model_name": "demo999"
+          }
+        },
+        "duplicate_model_name": {
+          "error": {
+            "code": "DUPLICATE_MODEL_NAME",
+            "message": "模型名称已存在",
+            "model_name": "demo1"
+          }
+        },
+        "invalid_proxy_key": {
+          "error": {
+            "code": "INVALID_PROXY_KEY",
+            "message": "Proxy Key格式无效",
+            "expected_format": "sk-[a-zA-Z0-9]{32,64}"
+          }
+        },
+        "database_connection_error": {
+          "error": {
+            "code": "DATABASE_CONNECTION_ERROR",
+            "message": "数据库连接失败",
+            "database": "mongodb",
+            "host": "mongo",
+            "port": 27017
+          }
+        },
+        "vector_search_error": {
+          "error": {
+            "code": "VECTOR_SEARCH_ERROR",
+            "message": "向量搜索失败",
+            "collection": "knowledge_base",
+            "reason": "查询向量维度不匹配"
+          }
+        },
+        "file_upload_error": {
+          "error": {
+            "code": "FILE_UPLOAD_ERROR",
+            "message": "文件上传失败",
+            "filename": "large_file.pdf",
+            "max_size_mb": 100,
+            "actual_size_mb": 150,
+            "reason": "文件大小超过限制"
+          }
+        },
+        "transcription_failed": {
+          "error": {
+            "code": "TRANSCRIPTION_FAILED",
+            "message": "音频转录失败",
+            "media_id": "media_001",
+            "processor": "whisper",
+            "reason": "音频质量过低，无法识别"
+          }
+        }
+      },
+      
+      "network_errors": {
+        "connection_refused": {
+          "error": {
+            "code": "CONNECTION_REFUSED",
+            "message": "无法连接到服务器",
+            "target": "api.siliconflow.cn:443"
+          }
+        },
+        "timeout": {
+          "error": {
+            "code": "TIMEOUT",
+            "message": "请求超时",
+            "timeout_seconds": 30,
+            "elapsed_seconds": 30.5
+          }
+        },
+        "dns_error": {
+          "error": {
+            "code": "DNS_ERROR",
+            "message": "无法解析域名",
+            "hostname": "invalid-domain.example.com"
+          }
+        }
+      }
+    },
+    
+    "edge_cases": {
+      "description": "边界情况和特殊场景",
+      
+      "concurrent_operations": {
+        "description": "并发操作场景",
+        "scenario": "同时修改同一个虚拟模型",
+        "operations": [
+          {"user": "user1", "action": "update", "field": "current", "value": "big"},
+          {"user": "user2", "action": "update", "field": "current", "value": "small"}
+        ],
+        "expected_result": "后提交的覆盖先提交的，或返回冲突错误"
+      },
+      
+      "race_conditions": {
+        "description": "竞态条件",
+        "scenario": "同时重载Skill和修改配置",
+        "timing": "几乎同时触发",
+        "expected": "系统应保持一致性，不崩溃"
+      },
+      
+      "partial_failures": {
+        "description": "部分失败场景",
+        "scenario": "批量操作中部分成功部分失败",
+        "example": {
+          "batch_delete": {
+            "requested": ["id1", "id2", "id3"],
+            "successful": ["id1", "id2"],
+            "failed": [{"id": "id3", "reason": "not_found"}]
+          }
+        }
+      },
+      
+      "resource_exhaustion": {
+        "description": "资源耗尽场景",
+        "scenarios": {
+          "disk_full": {"error": "磁盘空间不足", "available_mb": 0},
+          "memory_exhausted": {"error": "内存不足", "used_percent": 99},
+          "too_many_connections": {"error": "连接数超限", "max_connections": 1000}
+        }
+      },
+      
+      "data_corruption": {
+        "description": "数据损坏场景",
+        "scenarios": {
+          "invalid_json_in_db": {"document_id": "doc_001", "issue": "JSON解析失败"},
+          "checksum_mismatch": {"file": "media_001.mp3", "expected_checksum": "abc", "actual": "def"},
+          "orphaned_records": {"type": "knowledge_chunks", "parent_document_deleted": true}
+        }
+      }
+    },
+    
+    "load_test_data": {
+      "description": "压力测试数据",
+      
+      "high_volume": {
+        "conversations": {
+          "count": 100000,
+          "per_day": 10000,
+          "total_messages": 500000
+        },
+        "knowledge_documents": {
+          "count": 10000,
+          "total_chunks": 50000,
+          "total_size_gb": 10
+        },
+        "media_files": {
+          "count": 5000,
+          "total_size_gb": 500
+        }
+      },
+      
+      "burst_traffic": {
+        "requests_per_second": 1000,
+        "concurrent_users": 500,
+        "duration_minutes": 10
+      }
+    }
+  }
+}

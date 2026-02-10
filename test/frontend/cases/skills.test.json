@@ -1,0 +1,42 @@
+{
+  "test_suite": "SkillManager",
+  "description": "Skill管理器页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC009",
+      "name": "test_render_skill_list",
+      "description": "测试Skill列表正确渲染",
+      "category": "component",
+      "priority": "P0",
+      "component": "Skills",
+      "preconditions": ["API返回8个Skill"],
+      "inputs": {},
+      "expected": {
+        "skill_count": 8
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.skill-item')).toHaveLength(8)"
+      ]
+    },
+    {
+      "id": "F-TC010",
+      "name": "test_toggle_skill_enabled",
+      "description": "测试启用/禁用Skill",
+      "category": "integration",
+      "priority": "P0",
+      "component": "Skills",
+      "preconditions": ["Skill列表已加载"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": ".skill-switch:first"}
+      ],
+      "expected": {
+        "api_called": true,
+        "toggled": true
+      },
+      "assertions": [
+        "expect(api.put).toHaveBeenCalled()"
+      ]
+    }
+  ]
+}

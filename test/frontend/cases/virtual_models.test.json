@@ -1,0 +1,71 @@
+{
+  "test_suite": "VirtualModelManager",
+  "description": "虚拟模型管理页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC004",
+      "name": "test_render_model_list",
+      "description": "测试模型列表正确渲染",
+      "category": "component",
+      "priority": "P0",
+      "component": "VirtualModels",
+      "preconditions": ["API返回2个虚拟模型"],
+      "inputs": {},
+      "expected": {
+        "table_row_count": 2,
+        "columns": ["名称", "Proxy Key", "系统URL", "当前模型", "状态", "操作"]
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-table__row')).toHaveLength(2)"
+      ]
+    },
+    {
+      "id": "F-TC005",
+      "name": "test_switch_model",
+      "description": "测试切换模型类型",
+      "category": "integration",
+      "priority": "P0",
+      "component": "VirtualModels",
+      "preconditions": ["第一行模型当前为small"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": ".switch-model-btn:first"}
+      ],
+      "expected": {
+        "api_called": true,
+        "new_model": "big"
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalled()"
+      ]
+    },
+    {
+      "id": "F-TC006",
+      "name": "test_add_model_dialog",
+      "description": "测试添加模型对话框",
+      "category": "component",
+      "priority": "P0",
+      "component": "VirtualModels",
+      "preconditions": ["组件已挂载"],
+      "inputs": {
+        "model_data": {
+          "name": "test-model",
+          "proxy_key": "sk-test",
+          "current": "small"
+        }
+      },
+      "actions": [
+        {"type": "click", "target": "button:contains('添加模型')"},
+        {"type": "fill", "target": "input[name='name']", "value": "test-model"},
+        {"type": "click", "target": "button[type='submit']"}
+      ],
+      "expected": {
+        "dialog_closed": true,
+        "api_called": true
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalled()"
+      ]
+    }
+  ]
+}

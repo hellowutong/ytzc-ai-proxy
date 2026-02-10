@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  # MongoDB - 对话历史和配置存储
+  mongo:
+    image: mongo:7.0
+    container_name: ai-gateway-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: ai_gateway
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - 缓存和任务队列
+  redis:
+    image: redis:7-alpine
+    container_name: ai-gateway-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Qdrant - 向量数据库
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ai-gateway-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SearXNG - 搜索引擎
+  searxng:
+    image: searxng/searxng:latest
+    container_name: ai-gateway-searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LibreX - 私有搜索引擎
+  librex:
+    build:
+      context: ./librex
+      dockerfile: Dockerfile
+    container_name: ai-gateway-librex
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 4get - 去中心化搜索引擎
+  4get:
+    build:
+      context: ./4get
+      dockerfile: Dockerfile
+    container_name: ai-gateway-4get
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AI Gateway Backend - FastAPI后端
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: ai-gateway-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app
+      - ../config.yml:/app/config.yml
+      - ../upload:/app/upload
+      - ../logs:/app/logs
+      - ../skill:/app/skill
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+    depends_on:
+      - mongo
+      - redis
+      - qdrant
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AI Gateway Frontend - Vue3前端
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: ai-gateway-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  ai-gateway-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

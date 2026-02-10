@@ -1,0 +1,103 @@
+{
+  "test_suite": "VirtualModelManager",
+  "description": "虚拟模型管理测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_list_virtual_models",
+      "description": "测试列出所有虚拟模型",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "model"],
+      "inputs": {},
+      "expected": {
+        "success": true,
+        "models_count": 2
+      },
+      "assertions": [
+        "assert response.code == 200",
+        "assert len(response.data) >= 1"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_create_virtual_model",
+      "description": "测试创建虚拟模型",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model"],
+      "inputs": {
+        "model": {
+          "name": "test-model",
+          "proxy_key": "sk-test123",
+          "current": "small",
+          "use": true
+        }
+      },
+      "expected": {
+        "success": true,
+        "model_created": true
+      },
+      "assertions": [
+        "assert response.code == 200"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_switch_model",
+      "description": "测试切换模型类型",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model"],
+      "inputs": {
+        "model_name": "demo1",
+        "target": "big"
+      },
+      "expected": {
+        "success": true,
+        "current": "big"
+      },
+      "assertions": [
+        "assert response.code == 200",
+        "assert response.data.current == 'big'"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_update_model_config",
+      "description": "测试更新模型配置",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "model"],
+      "inputs": {
+        "model_name": "demo1",
+        "updates": {
+          "force_current": true
+        }
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert response.code == 200"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_delete_virtual_model",
+      "description": "测试删除虚拟模型",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "model"],
+      "inputs": {
+        "model_name": "test-model"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert response.code == 200"
+      ]
+    }
+  ]
+}

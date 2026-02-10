@@ -1,0 +1,63 @@
+{
+  "test_suite": "Dashboard",
+  "description": "Dashboard看板页面测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC001",
+      "name": "test_render_stats_cards",
+      "description": "测试统计卡片正确渲染",
+      "category": "component",
+      "priority": "P0",
+      "component": "Dashboard",
+      "preconditions": ["Dashboard已挂载"],
+      "inputs": {},
+      "expected": {
+        "card_count": 6,
+        "cards_visible": true
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.stat-card')).toHaveLength(6)"
+      ]
+    },
+    {
+      "id": "F-TC002",
+      "name": "test_reload_config_button",
+      "description": "测试重载配置按钮",
+      "category": "integration",
+      "priority": "P0",
+      "component": "Dashboard",
+      "preconditions": ["Dashboard已挂载", "API返回成功"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": "button:contains('重载配置')"}
+      ],
+      "expected": {
+        "api_called": true,
+        "success_message": "配置重载成功"
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalledWith('/admin/ai/v1/config/reload')"
+      ]
+    },
+    {
+      "id": "F-TC003",
+      "name": "test_navigate_to_models",
+      "description": "测试点击虚拟模型卡片导航",
+      "category": "e2e",
+      "priority": "P1",
+      "component": "Dashboard",
+      "preconditions": ["Dashboard已挂载"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": ".stat-card:first"}
+      ],
+      "expected": {
+        "navigated": true,
+        "route": "/admin/models"
+      },
+      "assertions": [
+        "expect(router.push).toHaveBeenCalledWith('/admin/models')"
+      ]
+    }
+  ]
+}

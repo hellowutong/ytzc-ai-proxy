@@ -1,0 +1,43 @@
+{
+  "name": "ai-gateway-frontend",
+  "version": "1.0.0",
+  "description": "AI网关前端 - Vue3 + Element Plus",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
+    "type-check": "vue-tsc --noEmit",
+    "test:unit": "vitest",
+    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "element-plus": "^2.5.3",
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.6.7",
+    "@monaco-editor/loader": "^1.4.0",
+    "monaco-editor": "^0.45.0",
+    "markdown-it": "^14.0.0",
+    "marked": "^9.1.6",
+    "highlight.js": "^11.9.0",
+    "js-base64": "^3.7.6"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.3",
+    "@vue/test-utils": "^2.4.4",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.20.1",
+    "playwright": "^1.41.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vitest": "^1.2.2",
+    "vue-tsc": "^2.0.0",
+    "sass": "^1.70.0",
+    "@vitest/coverage-v8": "^1.2.2"
+  }
+}

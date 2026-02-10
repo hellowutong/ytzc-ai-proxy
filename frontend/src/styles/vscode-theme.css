@@ -1,0 +1,157 @@
+/* VS Code Dark Theme Variables */
+:root {
+  /* Background Colors */
+  --vscode-bg: #1e1e1e;
+  --vscode-sidebar-bg: #252526;
+  --vscode-activity-bar-bg: #333333;
+  --vscode-title-bar-bg: #3c3c3c;
+  --vscode-panel-bg: #2d2d30;
+  --vscode-input-bg: #3c3c3c;
+  --vscode-hover-bg: #2a2d2e;
+  --vscode-selection-bg: #264f78;
+  --vscode-line-highlight: #2d2d30;
+  
+  /* Border Colors */
+  --vscode-border: #1e1e1e;
+  --vscode-panel-border: #5a5a5a;
+  --vscode-input-border: #5a5a5a;
+  
+  /* Text Colors */
+  --vscode-text: #cccccc;
+  --vscode-text-secondary: #858585;
+  --vscode-text-inactive: #6e7681;
+  --vscode-link: #4fc1ff;
+  
+  /* Accent Colors */
+  --vscode-blue: #007acc;
+  --vscode-blue-light: #75beff;
+  --vscode-green: #4ec9b0;
+  --vscode-orange: #ce9178;
+  --vscode-yellow: #dcdcaa;
+  --vscode-purple: #c586c0;
+  --vscode-red: #f48771;
+  --vscode-cyan: #9cdcfe;
+  
+  /* Status Colors */
+  --vscode-success: #89d185;
+  --vscode-warning: #cca700;
+  --vscode-error: #f48771;
+  --vscode-info: #75beff;
+}
+
+/* Global styles for VS Code theme */
+body {
+  background-color: var(--vscode-bg);
+  color: var(--vscode-text);
+}
+
+/* Override Element Plus for VS Code theme */
+.vscode-theme .el-card {
+  background-color: var(--vscode-panel-bg);
+  border: 1px solid var(--vscode-border);
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-card__header {
+  background-color: var(--vscode-sidebar-bg);
+  border-bottom: 1px solid var(--vscode-border);
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-button {
+  background-color: var(--vscode-input-bg);
+  border-color: var(--vscode-input-border);
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-button--primary {
+  background-color: var(--vscode-blue);
+  border-color: var(--vscode-blue);
+}
+
+.vscode-theme .el-button--success {
+  background-color: var(--vscode-green);
+  border-color: var(--vscode-green);
+  color: #1e1e1e;
+}
+
+.vscode-theme .el-table {
+  background-color: transparent;
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-table th,
+.vscode-theme .el-table tr {
+  background-color: transparent;
+}
+
+.vscode-theme .el-table--enable-row-hover .el-table__body tr:hover > td {
+  background-color: var(--vscode-hover-bg);
+}
+
+.vscode-theme .el-input__wrapper {
+  background-color: var(--vscode-input-bg);
+  box-shadow: 0 0 0 1px var(--vscode-input-border);
+}
+
+.vscode-theme .el-input__inner {
+  background-color: transparent;
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-tag {
+  background-color: var(--vscode-input-bg);
+  border-color: var(--vscode-input-border);
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-tag--success {
+  background-color: rgba(137, 209, 133, 0.2);
+  border-color: var(--vscode-success);
+  color: var(--vscode-success);
+}
+
+.vscode-theme .el-tag--danger {
+  background-color: rgba(244, 135, 113, 0.2);
+  border-color: var(--vscode-error);
+  color: var(--vscode-error);
+}
+
+.vscode-theme .el-tag--warning {
+  background-color: rgba(204, 167, 0, 0.2);
+  border-color: var(--vscode-warning);
+  color: var(--vscode-warning);
+}
+
+.vscode-theme .el-tag--info {
+  background-color: rgba(117, 190, 255, 0.2);
+  border-color: var(--vscode-info);
+  color: var(--vscode-info);
+}
+
+.vscode-theme .el-dialog {
+  background-color: var(--vscode-panel-bg);
+}
+
+.vscode-theme .el-dialog__title {
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-menu {
+  background-color: var(--vscode-sidebar-bg);
+  border-right: 1px solid var(--vscode-border);
+}
+
+.vscode-theme .el-menu-item {
+  color: var(--vscode-text-secondary);
+}
+
+.vscode-theme .el-menu-item:hover {
+  background-color: var(--vscode-hover-bg);
+  color: var(--vscode-text);
+}
+
+.vscode-theme .el-menu-item.is-active {
+  background-color: var(--vscode-selection-bg);
+  color: var(--vscode-text);
+}

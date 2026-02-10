@@ -1,0 +1,99 @@
+{
+  "test_suite": "ConversationManager",
+  "description": "对话管理器测试套件",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "test_create_conversation",
+      "description": "测试创建新会话",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "conversation"],
+      "inputs": {
+        "virtual_model": "demo1"
+      },
+      "expected": {
+        "success": true,
+        "has_id": true
+      },
+      "assertions": [
+        "assert conversation_id is not None",
+        "assert len(conversation_id) > 0"
+      ]
+    },
+    {
+      "id": "TC002",
+      "name": "test_add_message",
+      "description": "测试添加消息到会话",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "conversation"],
+      "inputs": {
+        "conversation_id": "test-conv-id",
+        "role": "user",
+        "content": "你好"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    },
+    {
+      "id": "TC003",
+      "name": "test_get_conversation",
+      "description": "测试获取会话详情",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "conversation"],
+      "inputs": {
+        "conversation_id": "test-conv-id"
+      },
+      "expected": {
+        "found": true,
+        "has_messages": true
+      },
+      "assertions": [
+        "assert conversation is not None",
+        "assert 'messages' in conversation"
+      ]
+    },
+    {
+      "id": "TC004",
+      "name": "test_list_conversations",
+      "description": "测试列���会话",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["positive", "conversation"],
+      "inputs": {
+        "virtual_model": "demo1",
+        "limit": 10
+      },
+      "expected": {
+        "success": true,
+        "has_data": true
+      },
+      "assertions": [
+        "assert isinstance(conversations, list)"
+      ]
+    },
+    {
+      "id": "TC005",
+      "name": "test_delete_conversation",
+      "description": "测试删除会话",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "conversation"],
+      "inputs": {
+        "conversation_id": "test-conv-id"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert success is True"
+      ]
+    }
+  ]
+}
