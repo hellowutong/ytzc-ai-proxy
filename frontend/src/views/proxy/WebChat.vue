@@ -53,10 +53,11 @@
           </el-select>
         </div>
         
-        <div class="header-actions">
-          <el-tag v-if="currentModelInfo">{{ currentModelInfo }}</el-tag>
-          <el-button @click="clearChat">清空对话</el-button>
-        </div>
+          <div class="header-actions">
+            <el-tag v-if="currentModelInfo">{{ currentModelInfo }}</el-tag>
+            <el-button @click="clearChat">清空对话</el-button>
+            <el-button @click="closePage">关闭页面</el-button>
+          </div>
       </header>
 
       <!-- Messages -->
@@ -193,11 +194,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete, Setting, VideoPause, Promotion } from '@element-plus/icons-vue'
 import { useChatStore, useModelStore } from '@/stores'
 import type { Conversation } from '@/types'
 
+const router = useRouter()
 const chatStore = useChatStore()
 const modelStore = useModelStore()
 
@@ -257,6 +260,17 @@ const stopGeneration = () => {
 
 const clearChat = () => {
   chatStore.clearCurrentConversation()
+}
+
+const closePage = () => {
+  // Close the current window/tab and navigate back to main interface
+  if (window.opener) {
+    // If opened as a popup, close it
+    window.close()
+  } else {
+    // For regular tabs, navigate back to main interface
+    router.push('/admin/dashboard')
+  }
 }
 
 const saveSettings = () => {
