@@ -138,6 +138,9 @@ export const useChatStore = defineStore('chat', () => {
         currentConversation.value.updated_at = new Date().toISOString()
       }
 
+      // 刷新模型数据以获取最新的 current 值（关键词切换后需要更新显示）
+      await modelStore.fetchModels()
+
     } catch (error) {
       console.error('Failed to send message:', error)
     } finally {
