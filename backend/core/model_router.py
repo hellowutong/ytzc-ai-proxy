@@ -3,6 +3,7 @@
 """
 
 import logging
+import threading
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
@@ -187,9 +188,12 @@ class ModelRouter:
                             logger.info(f"持久化切换模型: {virtual_model} {current_model} -> {target}")
                             # 更新内存中的配置
                             model_config["current"] = target
-                            # 异步保存到文件（不阻塞路由）
-                            import asyncio
-                            asyncio.create_task(self._persist_model_switch(virtual_model, target))
+                            # 同步保存到配置文件（确保立即生效）
+                            threading.Thread(
+                                target=self._sync_persist_model_switch,
+                                args=(virtual_model, target),
+                                daemon=True
+                            ).start()
                         
                         return RouteResult(
                             model_type=target,
