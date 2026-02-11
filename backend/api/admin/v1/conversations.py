@@ -2,71 +2,45 @@
 对话历史管理API
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Request
+from typing import Optional
 from datetime import datetime
 
+from api.dependencies import get_conversation_manager
+from core.conversation_manager import ConversationManager
+
 router = APIRouter()
-
-
-class Message(BaseModel):
-    role: str
-    content: str
-    timestamp: Optional[str] = None
-
-
-class Conversation(BaseModel):
-    id: str
-    model: str
-    messages: List[Message]
-    created_at: str
-    updated_at: str
-
-
-# Mock conversations
-CONVERSATIONS = [
-    {
-        "id": "conv_001",
-        "model": "demo1",
-        "messages": [
-            {"role": "user", "content": "你好", "timestamp": "2025-01-09T10:00:00Z"},
-            {"role": "assistant", "content": "你好！有什么可以帮助你的吗？", "timestamp": "2025-01-09T10:00:05Z"}
-        ],
-        "created_at": "2025-01-09T10:00:00Z",
-        "updated_at": "2025-01-09T10:00:05Z"
-    },
-    {
-        "id": "conv_002",
-        "model": "demo2",
-        "messages": [
-            {"role": "user", "content": "讲个笑话", "timestamp": "2025-01-09T11:00:00Z"},
-            {"role": "assistant", "content": "为什么程序员总是分不清圣诞节和万圣节？因为 31 OCT = 25 DEC", "timestamp": "2025-01-09T11:00:05Z"}
-        ],
-        "created_at": "2025-01-09T11:00:00Z",
-        "updated_at": "2025-01-09T11:00:05Z"
-    }
-]
 
 
 @router.get("/conversations")
 async def get_conversations(
     page: int = 1,
     page_size: int = 20,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
 ):
     """获取对话列表"""
-    result = CONVERSATIONS
-    
-    if model:
-        result = [c for c in result if c["model"] == model]
+    conversations, total = await conversation_manager.list_conversations(
+        virtual_model=model,
+        limit=page_size,
+        offset=(page - 1) * page_size
+    )
     
     return {
         "code": 200,
         "message": "success",
         "data": {
-            "items": result,
-            "total": len(result),
+            "items": [
+                {
+                    "id": conv.id,
+                    "model": conv.virtual_model,
+                    "messages": [],  # 列表不返回详细消息
+                    "created_at": conv.created_at.isoformat() if isinstance(conv.created_at, datetime) else str(conv.created_at),
+                    "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at)
+                }
+                for conv in conversations
+            ],
+            "total": total,
             "page": page,
             "page_size": page_size
         }
@@ -74,32 +48,62 @@ async def get_conversations(
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str):
+async def get_conversation(
+    conversation_id: str,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
+):
     """获取单个对话详情"""
-    for conv in CONVERSATIONS:
-        if conv["id"] == conversation_id:
-            return {
-                "code": 200,
-                "message": "success",
-                "data": conv
-            }
+    conv = await conversation_manager.get_conversation(conversation_id)
     
-    raise HTTPException(status_code=404, detail="对话不存在")
+    if not conv:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {
+            "id": conv.id,
+            "model": conv.virtual_model,
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat() if isinstance(msg.timestamp, datetime) else str(msg.timestamp)
+                }
+                for msg in conv.messages
+            ],
+            "created_at": conv.created_at.isoformat() if isinstance(conv.created_at, datetime) else str(conv.created_at),
+            "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at)
+        }
+    }
+
+
+@router.post("/conversations")
+async def create_conversation(
+    body: dict,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
+):
+    """创建新对话"""
+    model = body.get("model", "")
+    conversation_id = await conversation_manager.create_conversation(model)
+    return {
+        "code": 200,
+        "message": "对话创建成功",
+        "data": {"id": conversation_id}
+    }
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str):
+async def delete_conversation(
+    conversation_id: str,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
+):
     """删除对话"""
-    global CONVERSATIONS
-    
-    original_len = len(CONVERSATIONS)
-    CONVERSATIONS = [c for c in CONVERSATIONS if c["id"] != conversation_id]
-    
-    if len(CONVERSATIONS) < original_len:
+    success = await conversation_manager.delete_conversation(conversation_id)
+    if success:
         return {
             "code": 200,
             "message": "对话删除成功",
             "data": None
         }
-    
     raise HTTPException(status_code=404, detail="对话不存在")

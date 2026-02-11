@@ -33,16 +33,31 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function createConversation(model: string) {
-    const newConversation: Conversation = {
-      id: Date.now().toString(),
-      model,
-      messages: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+    try {
+      // 先创建后端对话
+      const response = await fetch('/admin/ai/v1/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model })
+      })
+      const result = await response.json()
+      
+      if (result.code === 200) {
+        const newConversation: Conversation = {
+          id: result.data.id,  // 使用后端返回的ID
+          model,
+          messages: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        conversations.value.unshift(newConversation)
+        currentConversation.value = newConversation
+        return newConversation
+      }
+    } catch (error) {
+      console.error('Failed to create conversation:', error)
     }
-    conversations.value.unshift(newConversation)
-    currentConversation.value = newConversation
-    return newConversation
+    return null
   }
 
   function setCurrentConversation(conversation: Conversation | null) {
@@ -141,10 +156,34 @@ export const useChatStore = defineStore('chat', () => {
       // 刷新模型数据以获取最新的 current 值（关键词切换后需要更新显示）
       await modelStore.fetchModels()
 
+      // 保存对话消息到后端
+      await saveConversation(currentConversation.value)
+
     } catch (error) {
       console.error('Failed to send message:', error)
     } finally {
       isStreaming.value = false
+    }
+  }
+
+  async function saveConversation(conversation: Conversation | null) {
+    if (!conversation) return
+    
+    try {
+      const response = await fetch(`/admin/ai/v1/conversations/${conversation.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: conversation.messages,
+          updated_at: conversation.updated_at
+        })
+      })
+      const result = await response.json()
+      if (result.code === 200) {
+        console.log('Conversation saved')
+      }
+    } catch (error) {
+      console.error('Failed to save conversation:', error)
     }
   }
 
@@ -171,6 +210,7 @@ export const useChatStore = defineStore('chat', () => {
     createConversation,
     setCurrentConversation,
     sendMessage,
+    saveConversation,
     stopStreaming,
     updateSettings,
     clearCurrentConversation

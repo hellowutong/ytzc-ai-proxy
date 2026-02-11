@@ -236,8 +236,27 @@ const selectConversation = (conv: Conversation) => {
 }
 
 const deleteConversation = async (conv: Conversation) => {
-  // TODO: Implement delete
-  ElMessage.info('删除功能开发中')
+  try {
+    const response = await fetch(`/admin/ai/v1/conversations/${conv.id}`, {
+      method: 'DELETE'
+    })
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      // 从前端列表中移除
+      chatStore.conversations = chatStore.conversations.filter(c => c.id !== conv.id)
+      // 如果删除的是当前对话，清空当前对话
+      if (chatStore.currentConversation?.id === conv.id) {
+        chatStore.currentConversation = null
+      }
+      ElMessage.success('对话已删除')
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch (error) {
+    console.error('Failed to delete conversation:', error)
+    ElMessage.error('删除失败')
+  }
 }
 
 const sendMessage = async () => {
