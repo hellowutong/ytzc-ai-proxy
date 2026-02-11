@@ -487,35 +487,6 @@ onMounted(() => {
 }
 
 :deep(.el-table td) {
-  color: var(--vscode-text);
-}
-
-/* VS Code style buttons */
-:deep(.el-button--primary) {
-  background: var(--vscode-blue);
-  border-color: var(--vscode-blue);
-}
-
-:deep(.el-button--primary:hover) {
-  background: var(--vscode-blue-light);
-  border-color: var(--vscode-blue-light);
-}
-
-:deep(.el-tag--success) {
-  background: rgba(76, 175, 80, 0.2);
-  border-color: var(--vscode-green);
-  color: var(--vscode-green);
-}
-
-:deep(.el-tag--danger) {
-  background: rgba(244, 67, 54, 0.2);
-  border-color: var(--vscode-red);
-  color: var(--vscode-red);
-}
-
-:deep(.el-tag--warning) {
-  background: rgba(255, 152, 0, 0.2);
-  border-color: var(--vscode-yellow);
-  color: var(--vscode-yellow);
+  color: var(--text-primary);
 }
 </style>

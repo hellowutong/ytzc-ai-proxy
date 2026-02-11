@@ -125,7 +125,7 @@ services:
       - ../config.yml:/app/config.yml
       - ../upload:/app/upload
       - ../logs:/app/logs
-      - ../skill:/app/skill
+      - ../skills:/app/skills
     environment:
       - PYTHONPATH=/app
       - ENVIRONMENT=production

@@ -55,6 +55,28 @@
         <el-switch v-model="form.use" class="vscode-switch" />
       </el-form-item>
 
+      <el-form-item label="关键字模型切换">
+        <el-switch v-model="form.keyword_switching.enabled" class="vscode-switch" />
+      </el-form-item>
+
+      <template v-if="form.keyword_switching.enabled">
+        <el-form-item label="小模型关键词">
+          <KeywordTagInput 
+            v-model="form.keyword_switching.small_keywords" 
+            placeholder="添加关键词"
+            :max-tags="50"
+          />
+        </el-form-item>
+
+        <el-form-item label="大模型关键词">
+          <KeywordTagInput 
+            v-model="form.keyword_switching.big_keywords"
+            placeholder="添加关键词"
+            :max-tags="50"
+          />
+        </el-form-item>
+      </template>
+
       <el-form-item label="当前模型">
         <div class="model-switch-row">
           <el-radio-group v-model="form.current" class="model-switch-group">
@@ -239,6 +261,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage, ElEmpty } from 'element-plus'
 import { DocumentCopy, Key, Connection, View, Hide, Sunny, Moon } from '@element-plus/icons-vue'
 import type { VirtualModel } from '@/types'
+import KeywordTagInput from '@/components/KeywordTagInput.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -292,6 +315,11 @@ const defaultForm = {
     use_system_default: true,
     use_custom: false,
     targets: ['searxng']
+  },
+  keyword_switching: {
+    enabled: false,
+    small_keywords: [] as string[],
+    big_keywords: [] as string[]
   }
 }
 

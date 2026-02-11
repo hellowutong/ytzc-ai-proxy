@@ -357,11 +357,24 @@ Authorization: Bearer {proxy_key}
         "skill": {"enabled": true, "version": "v2"},
         "skill_custom": {"enabled": false, "version": null},
         "target": ["searxng"]
+      },
+      "keyword_switching": {
+        "enabled": true,
+        "small_keywords": ["简单", "快速"],
+        "big_keywords": ["复杂", "详细"]
       }
     }
   ]
 }
 ```
+
+**路由优先级说明**:
+模型路由按以下优先级顺序执行（从高到低）：
+1. `force_current` - 强制使用当前模型（如果启用）
+2. **关键字模型切换** - 匹配 small_keywords/big_keywords 中的关键词（如果启用）
+3. **Skill 关键词路由** - 调用 router/关键词路由 Skill
+4. **Skill 意图识别路由** - 调用 router/意图识别 Skill
+5. **默认模型** - 使用 current 字段指定的模型
 
 #### 2.3.2 创建
 
@@ -398,6 +411,11 @@ Authorization: Bearer {proxy_key}
     "skill": {"enabled": true, "version": "v2"},
     "skill_custom": {"enabled": false, "version": null},
     "target": ["LibreX", "4get"]
+  },
+  "keyword_switching": {
+    "enabled": false,
+    "small_keywords": [],
+    "big_keywords": []
   }
 }
 ```

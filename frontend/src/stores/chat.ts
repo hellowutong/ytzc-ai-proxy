@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Conversation, Message } from '@/types'
+import { useModelStore } from './models'
 
 export const useChatStore = defineStore('chat', () => {
   // State
@@ -64,9 +65,17 @@ export const useChatStore = defineStore('chat', () => {
     try {
       isStreaming.value = true
 
+      // 获取当前模型的 proxy_key 用于认证
+      const modelStore = useModelStore()
+      const currentVm = modelStore.models.find(m => m.name === model)
+      const proxyKey = currentVm?.proxy_key || ''
+
       const response = await fetch('/proxy/ai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${proxyKey}`
+        },
         body: JSON.stringify({
           model,
           messages: currentConversation.value?.messages || [],

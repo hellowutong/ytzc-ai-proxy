@@ -254,23 +254,23 @@ const testModelConnection = async (modelConfig: { model: string; api_key: string
     } else {
       return { success: false, message: result.message || '连接失败' }
     }
-  } catch (error) {
-    return { success: false, message: '网络错误' }
+  } catch (error: any) {
+    console.error('模型连接测试失败:', error)
+    return { success: false, message: `网络错误: ${error.message || '未知错误'}` }
   }
 }
 
-// 测试模型（同时测试大小模型）
+// 测试模型（顺序测试大小模型，避免并发问题）
 const testModel = async (model: VirtualModel) => {
   testingModels.value[model.name] = true
   
   try {
     ElMessage.info(`开始测试模型 "${model.name}"...`)
     
-    // 同时测试小模型和大模型
-    const [smallResult, bigResult] = await Promise.all([
-      testModelConnection(model.small),
-      testModelConnection(model.big)
-    ])
+    // 先测试小模型
+    const smallResult = await testModelConnection(model.small)
+    // 再测试大模型（避免并发导致的连接问题）
+    const bigResult = await testModelConnection(model.big)
     
     // 保存测试结果
     testResults.value[model.name] = {
@@ -299,8 +299,9 @@ const testModel = async (model: VirtualModel) => {
         type: smallResult.success && bigResult.success ? 'success' : smallResult.success || bigResult.success ? 'warning' : 'error'
       }
     )
-  } catch (error) {
-    ElMessage.error('测试过程发生错误')
+  } catch (error: any) {
+    console.error('模型测试过程发生错误:', error)
+    ElMessage.error(`测试过程发生错误: ${error.message || '未知错误'}`)
   } finally {
     testingModels.value[model.name] = false
   }
