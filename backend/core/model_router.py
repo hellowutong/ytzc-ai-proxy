@@ -84,13 +84,13 @@ class ModelRouter:
             context = await self._get_conversation_context(conversation_id)
             
             # 3. 尝试关键词路由（最高优先级）
-            keyword_result = await self._try_keyword_router(user_input)
+            keyword_result = await self._try_keyword_router(user_input, config, virtual_model)
             if keyword_result:
                 logger.info(f"关键词路由匹配成功: {keyword_result.matched_rule}")
                 return keyword_result
             
-            # 4. 尝试意图识别路由
-            intent_result = await self._try_intent_router(user_input, context)
+            # 4. 尝试意图识别路由（传递 model_config 以读取 routing.skill）
+            intent_result = await self._try_intent_router(user_input, context, config)
             if intent_result and intent_result.confidence > 0.8:
                 logger.info(f"意图识别路由成功: {intent_result.reason}")
                 return intent_result
@@ -150,20 +150,82 @@ class ModelRouter:
             logger.warning(f"获取会话上下文失败: {e}")
             return ""
     
-    async def _try_keyword_router(self, user_input: str) -> Optional[RouteResult]:
+    async def _try_keyword_router(self, user_input: str, model_config: Dict[str, Any], virtual_model: str) -> Optional[RouteResult]:
         """
-        尝试关键词路由
+        尝试关键词路由（从虚拟模型的 routing 配置读取）
         
-        调用 router/关键词路由 Skill 进行匹配
+        优先级：
+        1. routing.keywords 配置（虚拟模型独立配置）
+        2. keyword_switching 配置（旧格式，兼容）
+        3. Skill 路由作为后备
         
         Args:
             user_input: 用户输入内容
+            model_config: 模型配置
+            virtual_model: 虚拟模型名称
             
         Returns:
             Optional[RouteResult]: 路由结果，未匹配时返回None
         """
         try:
-            # 调用Skill管理器执行关键词路由
+            user_input_lower = user_input.lower()
+            
+            # 1. 首先检查 routing.keywords 配置（虚拟模型独立配置）
+            routing_config = model_config.get("routing", {})
+            keywords_config = routing_config.get("keywords", {})
+            if keywords_config.get("enable", False):
+                for rule in keywords_config.get("rules", []):
+                    pattern = rule.get("pattern", "")
+                    target = rule.get("target", "")  # "big" 或 "small"
+                    
+                    if pattern.lower() in user_input_lower:
+                        logger.info(f"关键词路由匹配: '{pattern}' -> {target}")
+                        
+                        # 持久化切换：更新 current 值
+                        current_model = model_config.get("current", "small")
+                        if current_model != target:
+                            logger.info(f"持久化切换模型: {virtual_model} {current_model} -> {target}")
+                            # 更新内存中的配置
+                            model_config["current"] = target
+                            # 异步保存到文件（不阻塞路由）
+                            import asyncio
+                            asyncio.create_task(self._persist_model_switch(virtual_model, target))
+                        
+                        return RouteResult(
+                            model_type=target,
+                            matched_rule=f"keyword:{pattern}",
+                            reason=f"关键词匹配: {pattern} -> 切换到{target}模型",
+                            confidence=1.0
+                        )
+            
+            # 2. 兼容旧格式 keyword_switching
+            keyword_config = model_config.get("keyword_switching", {})
+            if keyword_config.get("enabled", False):
+                user_input_lower = user_input.lower()
+                
+                # 检查小模型关键词
+                for keyword in keyword_config.get("small_keywords", []):
+                    if keyword.lower() in user_input_lower:
+                        logger.info(f"关键字切换匹配: 小模型关键词 '{keyword}'")
+                        return RouteResult(
+                            model_type="small",
+                            matched_rule=f"keyword:{keyword}",
+                            reason=f"关键字切换匹配: {keyword}",
+                            confidence=1.0
+                        )
+                
+                # 检查大模型关键词
+                for keyword in keyword_config.get("big_keywords", []):
+                    if keyword.lower() in user_input_lower:
+                        logger.info(f"关键字切换匹配: 大模型关键词 '{keyword}'")
+                        return RouteResult(
+                            model_type="big",
+                            matched_rule=f"keyword:{keyword}",
+                            reason=f"关键字切换匹配: {keyword}",
+                            confidence=1.0
+                        )
+            
+            # 2. 未启用或未匹配，调用 Skill 路由作为后备
             result = await self._skill_manager.execute(
                 "router", "关键词路由",
                 user_input=user_input
@@ -186,21 +248,29 @@ class ModelRouter:
     async def _try_intent_router(
         self, 
         user_input: str, 
-        context: str
+        context: str,
+        model_config: Optional[Dict[str, Any]] = None
     ) -> Optional[RouteResult]:
         """
-        尝试意图识别路由
-        
-        调用 router/意图识别 Skill 进行分析
+        尝试意图识别路由（从虚拟模型的 routing.skill 配置读取）
         
         Args:
             user_input: 用户输入内容
             context: 会话上下文
+            model_config: 模型配置（可选，用于读取 routing.skill）
             
         Returns:
             Optional[RouteResult]: 路由结果，未匹配时返回None
         """
         try:
+            # 检查是否启用 routing.skill
+            if model_config:
+                routing_config = model_config.get("routing", {})
+                skill_config = routing_config.get("skill", {})
+                if not skill_config.get("enabled", True):
+                    logger.info("[ROUTER] routing.skill 已禁用，跳过意图识别")
+                    return None
+            
             # 调用Skill管理器执行意图识别
             result = await self._skill_manager.execute(
                 "router", "意图识别",
@@ -221,15 +291,83 @@ class ModelRouter:
             logger.warning(f"意图识别路由执行失败: {e}")
             return None
     
-    def get_router_config(self) -> Dict[str, Any]:
+    async def _persist_model_switch(self, virtual_model: str, target: str):
         """
-        获取路由配置
+        异步触发持久化（使用后台线程避免阻塞）
         
+        Args:
+            virtual_model: 虚拟模型名称
+            target: 目标模型 ("small" 或 "big")
+        """
+        import threading
+        threading.Thread(
+            target=self._sync_persist_model_switch,
+            args=(virtual_model, target),
+            daemon=True
+        ).start()
+
+    def _sync_persist_model_switch(self, virtual_model: str, target: str):
+        """
+        同步持久化模型切换到配置文件（在后台线程执行）
+        """
+        import time
+        import yaml
+        
+        # 延迟执行，避免阻塞主请求
+        time.sleep(0.5)
+        
+        try:
+            config_path = "/app/config.yml"
+            
+            logger.info(f"[PERSIST] 开始持久化: {virtual_model} -> {target}")
+            
+            # 读取当前配置
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            # 检查并更新 current 值
+            if ('ai-gateway' in config and 
+                'virtual_models' in config['ai-gateway'] and
+                virtual_model in config['ai-gateway']['virtual_models']):
+                
+                old_current = config['ai-gateway']['virtual_models'][virtual_model].get('current', 'small')
+                config['ai-gateway']['virtual_models'][virtual_model]['current'] = target
+                
+                # 写回文件 - 使用安全的方式避免编码问题
+                yaml_content = yaml.dump(config, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                with open(config_path, 'w', encoding='utf-8', newline='\n') as f:
+                    f.write(yaml_content)
+                
+                logger.info(f"✅ 已持久化: {virtual_model}.current {old_current} -> {target}")
+            else:
+                logger.warning(f"[PERSIST] 配置路径不存在: {virtual_model}")
+                
+        except Exception as e:
+            logger.error(f"❌ 持久化失败: {e}", exc_info=True)
+    
+    def get_router_config(self, model_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        获取路由配置（已从虚拟模型的 routing 配置读取）
+        
+        Args:
+            model_config: 虚拟模型配置（可选）
+            
         Returns:
             Dict[str, Any]: 路由配置信息
         """
-        return self._config_manager.get("ai-gateway.router", {
+        # 优先从虚拟模型的 routing 配置读取
+        if model_config:
+            routing_config = model_config.get("routing", {})
+            return {
+                "keyword_priority": True,
+                "intent_threshold": 0.8,
+                "context_window": 3,
+                "routing": routing_config
+            }
+        
+        # 兼容旧代码
+        return {
             "keyword_priority": True,
             "intent_threshold": 0.8,
             "context_window": 3
-        })
+        }

@@ -1,5 +1,39 @@
 // Type definitions for AI Gateway
 
+export interface KeywordConfig {
+  enabled: boolean
+  small_keywords: string[]
+  big_keywords: string[]
+}
+
+// 新增：关键词规则
+export interface KeywordRule {
+  pattern: string
+  target: 'small' | 'big'
+}
+
+// 新增：路由关键词配置
+export interface RoutingKeywordsConfig {
+  enable: boolean
+  rules: KeywordRule[]
+}
+
+// 新增：路由Skill配置
+export interface RoutingSkillConfig {
+  enabled: boolean
+  version: string
+  custom: {
+    enabled: boolean
+    version: string
+  }
+}
+
+// 新增：虚拟模型路由配置（替代全局router）
+export interface RoutingConfig {
+  keywords: RoutingKeywordsConfig
+  skill: RoutingSkillConfig
+}
+
 export interface VirtualModel {
   name: string
   proxy_key: string
@@ -8,8 +42,10 @@ export interface VirtualModel {
   use: boolean
   small: ModelConfig
   big: ModelConfig
+  routing: RoutingConfig  // 新增：虚拟模型独立路由配置
   knowledge: KnowledgeConfig
   web_search: WebSearchConfig
+  keyword_switching: KeywordConfig
 }
 
 export interface ModelConfig {

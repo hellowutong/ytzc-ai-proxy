@@ -48,7 +48,7 @@ ytzc-ai-proxy/
 │   ├── backend/
 │   └── frontend/
 │       └── screenshots/  # ⚠️ 前端debug截图存放于此
-├── skill/                # ⚠️ 所有Skill模块存放于此（Anthropic规范）
+├── skills/                # ⚠️ 所有Skill模块存放于此（Anthropic规范）
 │   ├── system/           # 系统默认Skill **严格遵循，谨记！**
 │   │   ├── router/v1/功能一/
 │   │   ├── router/v1/功能二/
@@ -292,13 +292,43 @@ output_schema:
 
 ### 7类Skill管理
 
-1. **router** - 模型路由决策（关键词/意图识别）
+1. **router** - 模型路由决策（关键词/意图识别）- ⚠️ 已下沉到虚拟模型的 `routing` 配置中
 2. **virtual_models** - 虚拟模型Skill（knowledge/web_search）
 3. **knowledge** - 知识提取与检索
 4. **rss** - RSS订阅处理
 5. **audio** - 音频转录处理
 6. **video** - 视频处理
 7. **text** - 文档解析
+
+### 虚拟模型路由配置（重要变更）
+
+**⚠️ 架构变更**：路由配置已从全局 `ai-gateway.router` 下沉到每个虚拟模型的 `routing` 字段。
+
+每个虚拟模型独立配置：
+```yaml
+virtual_models:
+  demo1:
+    routing:
+      keywords:
+        enable: true
+        rules:
+        - pattern: '@大哥'
+          target: big
+        - pattern: '@小弟'
+          target: small
+      skill:
+        enabled: true
+        version: v1
+        custom:
+          enabled: false
+          version: v2
+```
+
+路由优先级（虚拟模型级别）：
+1. **force_current** - 强制使用当前模型
+2. **routing.keywords** - 虚拟模型的关键词规则
+3. **routing.skill** - 虚拟模型的 Skill 路由
+4. **current** - 默认当前模型
 
 ### Skill验证
 

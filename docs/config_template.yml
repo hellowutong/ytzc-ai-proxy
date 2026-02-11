@@ -40,31 +40,13 @@ web_search: #该配置应该提供一个或多个 联网搜索的工具
     enable: true
     timeout: 5.0 # 需要额外加点超时时长
 # ------------------------------------------------------------
-ai-proxy: #代表整个系统
-  router:  #转发规则 是用大模型还是小模型
-    force: small #被强制的模型
-    enable-force: true #是否强制
-    skill: 
-        enabled: true  #系统默认的skill路由skill是否开启 对应 ./skill/router/v1/SKILL.md
-        version: "v1"  #系统默认的skill 版本号
-        custom: #客户自定义的路由skill 对应 ./skill/custom/router/v2/SKILL.md
-          enabled: true #客户自定义的路由skill是否开启
-          version: "v2" #客户自定义的路由skill版本号
-    keywords: #切换模型的关键词
-      enable: false 是否开启模型切换关键词
-      rules:   #关键词规则  
-        - pattern: "@大哥" #输入@"大哥" 切换大模型
-          target: big  
-        - pattern: "@小弟" #输入@"小弟" 切换小模型
-          target: small
-    
-
+ai-gateway: #代表整个系统
   virtual_models: #虚拟模型配置
     demo1: #虚拟模型名称
       proxy_key: "xxxxxxxxxxxxxxxxxxxxx" #虚拟模型的API KEY
       base_url: "http://192.168.1.100:8000/proxy/v1" #给客户调用地址
       current: "small" #当前使用的模型
-      force-current: false #是否强制使用当前模型
+      force_current: false #是否强制使用当前模型
       use: true #是否启用模型 该配置优先级高于 force-current,如果禁止使用则整个虚拟模型无法调用.
       small: #小模型配置
         model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B" #小模型的实际名称
@@ -74,7 +56,23 @@ ai-proxy: #代表整个系统
         model: "Pro/deepseek-ai/DeepSeek-V3.2"  
         api_key: "sk-xxxxxxxxxxxxxxxx"
         base_url: "https://api.siliconflow.cn/v1"
-       knowledge: #知识库配置
+      # 路由配置完全下沉到虚拟模型
+      routing:
+        keywords:
+          enable: false #是否开启模型切换关键词
+          rules:
+          - pattern: '@大哥'
+            target: big
+          - pattern: '@小弟'
+            target: small
+        skill:
+          enabled: true  #系统默认skill是否开启
+          version: "v1"  #系统Skill版本
+          custom:  #自定义skill配置
+            enabled: false
+            version: "v3"
+  virtual_models:       
+      knowledge: #知识库配置
          enabled: true #是否启用知识库
          shared: true #是否共享知识库
          skill:
@@ -83,7 +81,7 @@ ai-proxy: #代表整个系统
            custom:  #对应 ./skill/custom/knowledge/v3
              enable: false #是否使用用户自定义skill 
              version: "v3" #用户自定义skill版本，null表示不选择
-       web_search: #联网搜索
+      web_search: #联网搜索
          enabled: true #是否启用联网搜索
          skill:
            enabled: true  #对应 ./skill/system/web_search/v1

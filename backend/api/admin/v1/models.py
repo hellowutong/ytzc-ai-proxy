@@ -3,7 +3,7 @@
 """
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal
 from api.dependencies import get_config_manager
 from core.config import ConfigManager
@@ -38,6 +38,46 @@ class WebSearchConfig(BaseModel):
     targets: List[str] = ["searxng"]
 
 
+class KeywordConfig(BaseModel):
+    """关键词模型切换配置"""
+    enabled: bool = False
+    small_keywords: List[str] = Field(default_factory=list, max_length=50)
+    big_keywords: List[str] = Field(default_factory=list, max_length=50)
+    
+    @field_validator('small_keywords', 'big_keywords')
+    @classmethod
+    def validate_keywords(cls, v):
+        for keyword in v:
+            if len(keyword) > 50:
+                raise ValueError(f"关键词长度不能超过50字符: {keyword}")
+        return v
+
+
+class KeywordRule(BaseModel):
+    """关键词规则"""
+    pattern: str
+    target: Literal["small", "big"]
+
+
+class RoutingKeywordsConfig(BaseModel):
+    """路由关键词配置"""
+    enable: bool = False
+    rules: List[KeywordRule] = Field(default_factory=list)
+
+
+class RoutingSkillConfig(BaseModel):
+    """路由Skill配置"""
+    enabled: bool = True
+    version: str = "v1"
+    custom: dict = Field(default_factory=lambda: {"enabled": False, "version": "v2"})
+
+
+class RoutingConfig(BaseModel):
+    """虚拟模型路由配置（替代全局router）"""
+    keywords: RoutingKeywordsConfig = Field(default_factory=RoutingKeywordsConfig)
+    skill: RoutingSkillConfig = Field(default_factory=RoutingSkillConfig)
+
+
 class VirtualModel(BaseModel):
     name: str
     proxy_key: str = ""
@@ -46,8 +86,10 @@ class VirtualModel(BaseModel):
     use: bool = True
     small: ModelConfig = Field(default_factory=ModelConfig)
     big: ModelConfig = Field(default_factory=ModelConfig)
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)  # 新增：虚拟模型独立路由配置
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    keyword_switching: KeywordConfig = Field(default_factory=KeywordConfig)
 
 
 def _get_virtual_models_from_config(config_manager: ConfigManager) -> List[dict]:
