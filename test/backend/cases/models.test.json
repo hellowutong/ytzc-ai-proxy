@@ -98,6 +98,330 @@
       "assertions": [
         "assert response.code == 200"
       ]
+    },
+    {
+      "id": "TC006",
+      "name": "test_virtual_models_returns_force_current_field",
+      "description": "测试列表API返回统一的force_current字段名",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model", "field_normalization"],
+      "inputs": {},
+      "expected": {
+        "success": true,
+        "has_force_current": true
+      },
+      "assertions": [
+        "assert response.code == 200",
+        "assert len(response.data) > 0",
+        "assert 'force_current' in response.data[0]",
+        "assert 'force-current' not in response.data[0]"
+      ]
+    },
+    {
+      "id": "TC007",
+      "name": "test_model_connection_empty_api_key",
+      "description": "测试API Key为空时的连接测试",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["negative", "model", "test_connection", "validation"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/models/test-connection",
+          "body": {
+            "model": "gpt-4",
+            "api_key": "",
+            "base_url": "https://api.example.com/v1"
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 400,
+          "message": "API Key不能为空"
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 400",
+        "assert 'API Key' in response.json()['message'] or '不能为空' in response.json()['message']"
+      ]
+    },
+    {
+      "id": "TC008",
+      "name": "test_model_connection_empty_model",
+      "description": "测试模型名称为空时的连接测试",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["negative", "model", "test_connection", "validation"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/models/test-connection",
+          "body": {
+            "model": "",
+            "api_key": "sk-test",
+            "base_url": "https://api.example.com/v1"
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 400,
+          "message": "模型名称不能为空"
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 400",
+        "assert '模型' in response.json()['message'] or '不能为空' in response.json()['message']"
+      ]
+    },
+    {
+      "id": "TC009",
+      "name": "test_model_connection_empty_base_url",
+      "description": "测试Base URL为空时的连接测试",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["negative", "model", "test_connection", "validation"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/models/test-connection",
+          "body": {
+            "model": "gpt-4",
+            "api_key": "sk-test",
+            "base_url": ""
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 400,
+          "message": "Base URL不能为空"
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 400",
+        "assert 'Base URL' in response.json()['message'] or '不能为空' in response.json()['message']"
+      ]
+    },
+    {
+      "id": "TC010",
+      "name": "test_model_connection_invalid_api_key",
+      "description": "测试无效API Key时的连接测试",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["negative", "model", "test_connection", "authentication"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/models/test-connection",
+          "body": {
+            "model": "gpt-4",
+            "api_key": "invalid-key",
+            "base_url": "https://api.siliconflow.cn/v1"
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 401
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 401"
+      ]
+    },
+    {
+      "id": "TC011",
+      "name": "test_create_virtual_model_with_stream_support",
+      "description": "测试创建虚拟模型时stream_support字段",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model", "stream_support"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/virtual-models",
+          "body": {
+            "name": "test-stream-model",
+            "proxy_key": "sk-test-stream",
+            "current": "small",
+            "stream_support": false,
+            "use": true
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "data": {
+            "stream_support": false
+          }
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 200",
+        "assert response.json()['data']['stream_support'] == false"
+      ]
+    },
+    {
+      "id": "TC012",
+      "name": "test_update_virtual_model_stream_support",
+      "description": "测试更新虚拟模型stream_support字段",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model", "stream_support"],
+      "inputs": {
+        "request": {
+          "method": "PUT",
+          "url": "/admin/ai/v1/virtual-models/demo1",
+          "body": {
+            "stream_support": false
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "data": {
+            "stream_support": false
+          }
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 200",
+        "assert response.json()['data']['stream_support'] == false"
+      ]
+    },
+    {
+      "id": "TC013",
+      "name": "test_list_virtual_models_returns_stream_support",
+      "description": "测试列表API返回stream_support字段",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model", "stream_support"],
+      "inputs": {
+        "request": {
+          "method": "GET",
+          "url": "/admin/ai/v1/virtual-models"
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200
+        },
+        "has_stream_support_field": true
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 200",
+        "assert len(response.json()['data']) > 0",
+        "assert 'stream_support' in response.json()['data'][0]"
+      ]
+    },
+    {
+      "id": "TC014",
+      "name": "test_stream_support_default_value",
+      "description": "测试stream_support字段默认值是否为true",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["positive", "model", "stream_support", "default"],
+      "inputs": {
+        "model_data": {
+          "name": "test-default-stream",
+          "proxy_key": "sk-test"
+        }
+      },
+      "expected": {
+        "stream_support_default": true
+      },
+      "assertions": [
+        "from backend.api.admin.v1.models import VirtualModel",
+        "model = VirtualModel(**inputs['model_data'])",
+        "assert model.stream_support == true"
+      ]
+    },
+    {
+      "id": "TC015",
+      "name": "test_stream_support_persisted_to_config",
+      "description": "测试stream_support字段是否正确持久化到config.yml",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "model", "stream_support", "persistence"],
+      "inputs": {
+        "model_name": "demo1",
+        "stream_support": false
+      },
+      "expected": {
+        "persisted_to_config": true
+      },
+      "assertions": [
+        "config = config_manager.get('ai-gateway.virtual_models.demo1')",
+        "assert 'stream_support' in config",
+        "assert config['stream_support'] == false"
+      ]
+    },
+    {
+      "id": "TC016",
+      "name": "test_chat_stream_respects_stream_support_config",
+      "description": "测试对话接口根据stream_support配置决定是否支持流式",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "chat", "stream_support", "streaming"],
+      "inputs": {
+        "model_name": "demo1",
+        "stream_support": false,
+        "request_stream": true
+      },
+      "expected": {
+        "response_type": "non_stream",
+        "fallback_to_non_stream": true
+      },
+      "assertions": [
+        "assert response.headers['content-type'] == 'application/json'",
+        "assert 'choices' in response.json()"
+      ]
+    },
+    {
+      "id": "TC017",
+      "name": "test_stream_support_type_validation",
+      "description": "测试stream_support字段类型验证（必须为布尔值）",
+      "category": "api",
+      "priority": "P1",
+      "tags": ["negative", "model", "stream_support", "validation"],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/virtual-models",
+          "body": {
+            "name": "test-invalid-stream",
+            "proxy_key": "sk-test",
+            "stream_support": "invalid_string"
+          }
+        }
+      },
+      "expected": {
+        "status_code": 422,
+        "error_type": "validation_error"
+      },
+      "assertions": [
+        "assert response.status_code == 422",
+        "assert 'stream_support' in str(response.json()) or 'boolean' in str(response.json()).lower()"
+      ]
     }
   ]
 }

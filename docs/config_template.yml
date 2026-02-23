@@ -48,6 +48,7 @@ ai-gateway: #代表整个系统
       current: "small" #当前使用的模型
       force_current: false #是否强制使用当前模型
       use: true #是否启用模型 该配置优先级高于 force-current,如果禁止使用则整个虚拟模型无法调用.
+      stream_support: true #是否支持流式返回
       small: #小模型配置
         model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B" #小模型的实际名称
         api_key: "sk-xxxxxxxxxxxxxxxx" #API KEY
@@ -56,6 +57,26 @@ ai-gateway: #代表整个系统
         model: "Pro/deepseek-ai/DeepSeek-V3.2"  
         api_key: "sk-xxxxxxxxxxxxxxxx"
         base_url: "https://api.siliconflow.cn/v1"
+      vm_knowledge: #知识库配置
+         enabled: true #是否启用知识库
+         shared: true #是否共享知识库
+         skill:
+           enabled: true  
+           version: "v1"  #系统Skill版本，null表示不选择 对应./skill/system/virtual_models/vm_knowledge/v1
+           custom:  #对应 ./skill/custom/knowledge/v3
+             enable: false #是否使用用户自定义skill 
+             version: "v3" #用户自定义skill版本，null表示不选择 对应./skill/custom/virtual_models/vm_knowledge/v1
+      web_search: #联网搜索
+         enabled: true #是否启用联网搜索
+         skill:
+           enabled: true  
+           version: "v2"  #系统Skill版本，null表示不选择 对应./skill/system/virtual_models/web_search/v2
+           custom:  
+             enable: false #是否使用用户自定义skill 
+             version: null #用户自定义skill版本，null表示不选择 对应./skill/custom/virtual_models/web_search/v2
+         target:
+           - LibreX # 关联 LibreX 搜索
+           - 4get # 关联 4get 搜索        
       # 路由配置完全下沉到虚拟模型
       routing:
         keywords:
@@ -67,37 +88,17 @@ ai-gateway: #代表整个系统
             target: small
         skill:
           enabled: true  #系统默认skill是否开启
-          version: "v1"  #系统Skill版本
+          version: "v1"  #系统Skill版本 null表示不选择， 对应./skill/system/virtual_models/routing/v1
           custom:  #自定义skill配置
             enabled: false
-            version: "v3"
-  virtual_models:       
-      knowledge: #知识库配置
-         enabled: true #是否启用知识库
-         shared: true #是否共享知识库
-         skill:
-           enabled: true  #对应 ./skill/system/knowledge/v1
-           version: "v1"  #系统Skill版本，null表示不选择
-           custom:  #对应 ./skill/custom/knowledge/v3
-             enable: false #是否使用用户自定义skill 
-             version: "v3" #用户自定义skill版本，null表示不选择
-      web_search: #联网搜索
-         enabled: true #是否启用联网搜索
-         skill:
-           enabled: true  #对应 ./skill/system/web_search/v1
-           version: "v1"  #系统Skill版本，null表示不选择
-           custom:  #对应 ./skill/custom/web_search/v3
-             enable: false #是否使用用户自定义skill 
-             version: "v3" #用户自定义skill版本，null表示不选择
-         target:
-           - searxng: # 关联searxng 搜索
-    
+            version: "v3" #对应./skill/custom/virtual_models/routing/v1
     demo2:
       proxy_key: "yyyyyyyyyyyyyyyyy"
       base_url: "http://192.168.1.100:8000/proxy/v1"
       current: "big"
       force: false
       use: true
+      stream_support: true #是否支持流式返回
       small:
         model: "ollama/qwen2.5:7b"
         base_url: "http://localhost:11434/v1"
@@ -106,27 +107,41 @@ ai-gateway: #代表整个系统
         model: "openai/gpt-4o"
         api_key: "sk-xxxxxxxxxxxxxxxx"
         base_url: "https://api.openai.com/v1"
-       knowledge: #知识库配置
+      vm_knowledge: #知识库配置
          enabled: true #是否启用知识库
          shared: true #是否共享知识库
          skill:
-           enabled: true  #对应 ./skill/system/knowledge/v1
+           enabled: true  #对应 ./skill/system/virtual_models/vm_knowledge/v1
            version: "v1"  #系统Skill版本，null表示不选择
-           custom:  #对应 ./skill/custom/knowledge/v3
+           custom:  
              enable: false #是否使用用户自定义skill 
-             version: "v3" #用户自定义skill版本，null表示不选择
-       web_search: #联网搜索
+             version: "v3" #用户自定义skill版本，null表示不选择 对应 ./skill/custom/virtual_models/vm_knowledge/v3
+      web_search: #联网搜索
          enabled: true #是否启用联网搜索
          skill:
-           enabled: true  #对应 ./skill/system/web_search/v1
+           enabled: true  #对应 ./skill/system/virtual_models/web_search/v2
            version: "v2"  #系统Skill版本，null表示不选择
-           custom:  #对应 ./skill/custom/web_search/v3
+           custom:  #对应 ./skill/custom/virtual_models/web_search/v3
              enable: false #是否使用用户自定义skill 
-             version: null #用户自定义skill版本，null表示不选择
+             version: "v3" #用户自定义skill版本，null表示不选择
          target:
            - LibreX # 关联 LibreX 搜索
            - 4get # 关联 4get 搜索
-    
+            # 路由配置完全下沉到虚拟模型
+      routing:
+        keywords:
+          enable: false #是否开启模型切换关键词
+          rules:
+          - pattern: '@大哥'
+            target: big
+          - pattern: '@小弟'
+            target: small
+        skill:
+          enabled: true  #系统默认skill是否开启 对应 ./skill/system/virtual_models/routing/v1
+          version: "v1"  #系统Skill版本
+          custom:  #自定义skill配置
+            enabled: false
+            version: "v3" #对应 ./skill/custom/virtual_models/routing/v3
   knowledge: #知识库模块 同时提供手动抓取
     threshold:
       extraction: 0.70 #知识提取阈值
@@ -186,6 +201,12 @@ ai-gateway: #代表整个系统
           enabled: true
   media:
     video: #需要实现视频文件下载 指定的视频文件,上传视频文件。解析视频内容通过knowledge模块提取知识，然后持久化到向量，
+      skill: 
+        enabled: true  #系统默认的skill是否开启 对应 ./skills/media/video/v1/SKILL.md
+        version: "v1"  #系统默认的skill 版本号
+        custom: #客户自定义的skill 对应 ./skills/custom/media/video/v2/SKILL.md
+          enabled: true #客户自定义的skill是否开启
+          version: "v2" #客户自定义的skill版本号       
       upload:
         max_size_mb: 100 #最大上传文件大小
         allowd_type: 允许的类型
@@ -207,6 +228,12 @@ ai-gateway: #代表整个系统
         max_concurrent: 3 #最大并发数
         timeout_seconds: 300 #超时时间
     audio: #需要实现音频文件下载 指定的音频文件,上传音频文件。解析音频内容通过knowledge模块提取知识，然后持久化到向量。
+      skill: 
+        enabled: true  #系统默认的skill是否开启 对应 ./skills/media/audio/v1/SKILL.md
+        version: "v1"  #系统默认的skill 版本号
+        custom: #客户自定义的skill 对应 ./skills/custom/media/audio/v2/SKILL.md
+          enabled: true #客户自定义的skill是否开启
+          version: "v2" #客户自定义的skill版本号           
       upload:
         max_size_mb: 100 #最大上传文件大小
         allowd_type: 允许的类型
@@ -228,31 +255,31 @@ ai-gateway: #代表整个系统
         enabled: true #是否启用URL下载
         max_concurrent: 3 #最大并发数
         timeout_seconds: 300 #超时时间
-  text:
-    skill: 
-      enabled: true  #系统默认的skill是否开启 对应 ./skill/text/v1/SKILL.md
-      version: "v1"  #系统默认的skill 版本号
-      custom: #客户自定义的skill 对应 ./skill/custom/text/v2/SKILL.md
-        enabled: true #客户自定义的skill是否开启
-        version: "v2" #客户自定义的skill版本号    
-    upload:
-      max_size_mb: 100 #最大上传文件大小
-      allowd_type: 允许的类型
-          - doc
-          - txt
-          - jpg
-          - pdf
-      path: #上传文件存储路径
-      transcription:
-        default_model: "base" #默认转录模型
-        language: "zh" #默认转录语言
-        size_mb: 50 #大于多少mb时候自动分割
-        split: 3 # 1默认不分割(例如3 分割为3等分) ,否则按数字分割等份再进行转录
-        enabled: true #是否下载完毕立即自动转录否则手动        
-    download: #（编程注意 上传下载的API设置）
-      enabled: true #是否启用URL下载
-      max_concurrent: 3 #最大并发数
-      timeout_seconds: 300 #超时时间
+    text:
+      skill: 
+        enabled: true  #系统默认的skill是否开启 对应 ./skill/media/text/v1/SKILL.md
+        version: "v1"  #系统默认的skill 版本号
+        custom: #客户自定义的skill 对应 ./skill/custom/media/text/v2/SKILL.md
+          enabled: true #客户自定义的skill是否开启
+          version: "v2" #客户自定义的skill版本号    
+      upload:
+        max_size_mb: 100 #最大上传文件大小
+        allowd_type: 允许的类型
+            - doc
+            - txt
+            - jpg
+            - pdf
+        path: #上传文件存储路径
+        transcription:
+          default_model: "base" #默认转录模型
+          language: "zh" #默认转录语言
+          size_mb: 50 #大于多少mb时候自动分割
+          split: 3 # 1默认不分割(例如3 分割为3等分) ,否则按数字分割等份再进行转录
+          enabled: true #是否下载完毕立即自动转录否则手动        
+      download: #（编程注意 上传下载的API设置）
+        enabled: true #是否启用URL下载
+        max_concurrent: 3 #最大并发数
+        timeout_seconds: 300 #超时时间
   log: #日志配置
     system: #系统日志
       level: INFO #DEBUG/INFO/WARNING/ERROR

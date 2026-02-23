@@ -14,6 +14,11 @@
 
 **POST** `/proxy/ai/v1/chat/completions`
 
+**重要变更**:
+- **支持流式响应**：根据虚拟模型配置的 `stream_support` 决定是否支持流式
+- **ChatBox兼容**：支持OpenAI标准格式，包括 `content` 为数组的格式
+- **响应格式标准化**：移除非标准字段，完全兼容OpenAI API
+
 **请求头**:
 ```http
 Content-Type: application/json
@@ -24,17 +29,27 @@ Authorization: Bearer {proxy_key}  # config.yml中的proxy_key
 ```json
 {
   "model": "demo1",              # 虚拟模型名称
+  "conversation_id": "conv_xxx",  // 可选，首次对话不传
   "messages": [
     {"role": "system", "content": "你是AI助手"},
     {"role": "user", "content": "你好"}
   ],
-  "stream": true,                # 是否流式响应
   "temperature": 0.7,
-  "max_tokens": 2000
+  "max_tokens": 2000,
+  "stream": false  // 可选：true/false，根据虚拟模型配置决定是否支持
 }
 ```
 
-**响应** (非流式):
+**支持的消息格式**:
+```json
+// 格式1: 传统字符串（WebChat）
+{"role": "user", "content": "讲一个故事"}
+
+// 格式2: 数组格式（ChatBox）
+{"role": "user", "content": [{"type": "text", "text": "讲一个故事"}]}
+```
+
+**非流式响应** (`stream: false`):
 ```json
 {
   "id": "chatcmpl-xxx",
@@ -57,16 +72,33 @@ Authorization: Bearer {proxy_key}  # config.yml中的proxy_key
 }
 ```
 
-**响应** (流式-SSE):
+**流式响应** (`stream: true` 且虚拟模型配置 `stream_support: true`):
 ```
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"}}]}
+data: {"id": "chatcmpl-xxx", "object": "chat.completion.chunk", "choices": [{"delta": {"role": "assistant"}}]}
 
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"你好"}}]}
+data: {"id": "chatcmpl-xxx", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Hello"}}]}
 
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"！"}}]}
+data: {"id": "chatcmpl-xxx", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "!"}}]}
+
+data: {"id": "chatcmpl-xxx", "object": "chat.completion.chunk", "choices": [{"finish_reason": "stop"}]}
 
 data: [DONE]
 ```
+
+**流式支持配置**:
+在 `config.yml` 中为每个虚拟模型配置：
+```yaml
+ai-gateway:
+  virtual_models:
+    demo1:
+      proxy_key: xxxxxxxxxxxxxxxxxxxxx
+      stream_support: true  # 是否支持流式响应
+      ...
+```
+
+**注意**: 
+- 如果客户端请求流式但模型不支持 (`stream_support: false`)，将降级为非流式响应
+- 响应格式完全兼容OpenAI API，移除了 `conversation_id` 和 `metadata` 等非标准字段
 
 **错误响应**:
 ```json
@@ -320,65 +352,248 @@ Authorization: Bearer {proxy_key}
 
 ---
 
-### 2.3 虚拟模型管理
+#### 2.2.5 获取路由配置
 
-#### 2.3.1 列表
-
-**GET** `/admin/ai/v1/models`
+**GET** `/admin/ai/v1/config/router`
 
 **响应**:
 ```json
 {
-  "models": [
+  "code": 200,
+  "data": {
+    "force": "small",
+    "enable-force": true,
+    "keywords": {
+      "enable": false,
+      "rules": [
+        { "pattern": "@大哥", "target": "big" },
+        { "pattern": "@小弟", "target": "small" }
+      ]
+    },
+    "skill": {
+      "enabled": true,
+      "version": "v1",
+      "custom": {
+        "enabled": true,
+        "version": "v2"
+      }
+    }
+  }
+}
+```
+
+---
+
+#### 2.2.6 保存路由配置
+
+**POST** `/admin/ai/v1/config/router`
+
+**请求体**:
+```json
+{
+  "force": "small",
+  "enable-force": true,
+  "keywords": {
+    "enable": true,
+    "rules": [
+      { "pattern": "@大哥", "target": "big" },
+      { "pattern": "@小弟", "target": "small" }
+    ]
+  },
+  "skill": {
+    "enabled": true,
+    "version": "v1",
+    "custom": {
+      "enabled": false,
+      "version": "v2"
+    }
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "路由配置保存成功",
+  "data": null
+}
+```
+
+---
+
+#### 2.2.7 测试路由
+
+**POST** `/admin/ai/v1/config/router/test`
+
+**请求体**:
+```json
+{
+  "input": "@大哥 你好",
+  "virtual_model": "demo1"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "data": {
+    "model_type": "big",
+    "matched_rule": "global_keyword:@大哥",
+    "reason": "全局关键词匹配: @大哥",
+    "confidence": 1.0
+  }
+}
+```
+
+---
+
+### 2.3 虚拟模型管理
+
+#### 2.3.1 列表
+
+**GET** `/admin/ai/v1/virtual-models`
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": [
     {
       "name": "demo1",
-      "proxy_key_masked": "sk-xxx...abc",  # 掩码显示
-      "proxy_key_full": "sk-xxxxxxxxxxxxxxxx",  # 完整key
+      "proxy_key": "sk-demo1-a1b2c3d4e5f6g7h8",
       "base_url": "http://192.168.1.100:8000/proxy/v1",
       "current": "small",
       "force_current": false,
+      "stream_support": true,
       "use": true,
       "small": {
         "model": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+        "api_key": "sk-xxx",
         "base_url": "https://api.siliconflow.cn/v1"
       },
       "big": {
         "model": "Pro/deepseek-ai/DeepSeek-V3.2",
+        "api_key": "sk-xxx",
         "base_url": "https://api.siliconflow.cn/v1"
+      },
+      "routing": {
+        "keywords": {
+          "enable": false,
+          "rules": [
+            {"pattern": "@大哥", "target": "big"},
+            {"pattern": "@小弟", "target": "small"}
+          ]
+        },
+        "skill": {
+          "enabled": true,
+          "version": "v1",
+          "custom": {
+            "enabled": false,
+            "version": "v2"
+          }
+        }
       },
       "knowledge": {
         "enabled": true,
         "shared": true,
-        "skill": {"enabled": true, "version": "v1"},
-        "skill_custom": {"enabled": false, "version": null}
+        "system_default_skill": "v1",
+        "custom_skill": "v1",
+        "use_system_default": true,
+        "use_custom": false
       },
       "web_search": {
         "enabled": true,
-        "skill": {"enabled": true, "version": "v2"},
-        "skill_custom": {"enabled": false, "version": null},
-        "target": ["searxng"]
+        "system_default_skill": "v1",
+        "custom_skill": "v1",
+        "use_system_default": true,
+        "use_custom": false,
+        "targets": ["searxng"]
       },
       "keyword_switching": {
-        "enabled": true,
-        "small_keywords": ["简单", "快速"],
-        "big_keywords": ["复杂", "详细"]
+        "enabled": false,
+        "small_keywords": [],
+        "big_keywords": []
       }
     }
   ]
 }
 ```
 
-**路由优先级说明**:
-模型路由按以下优先级顺序执行（从高到低）：
-1. `force_current` - 强制使用当前模型（如果启用）
-2. **关键字模型切换** - 匹配 small_keywords/big_keywords 中的关键词（如果启用）
-3. **Skill 关键词路由** - 调用 router/关键词路由 Skill
-4. **Skill 意图识别路由** - 调用 router/意图识别 Skill
-5. **默认模型** - 使用 current 字段指定的模型
+**说明**:
+- 实际API端点为 `/admin/ai/v1/virtual-models`（非 `/admin/ai/v1/models`）
+- `routing` 字段为新增的路由配置（与 `keyword_switching` 并存）
+- `routing.keywords` 使用 `enable` 字段（注意不是 `enabled`）
+- `keyword_switching` 为传统的关键词切换配置（按 small/big 分类）
+- `stream_support` 表示是否支持流式响应（SSE），默认为 true
 
-#### 2.3.2 创建
+#### 2.3.2 获取详情
 
-**POST** `/admin/ai/v1/models`
+**GET** `/admin/ai/v1/virtual-models/{name}`
+
+**路径参数**:
+- `name`: 虚拟模型名称
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "name": "demo1",
+    "proxy_key": "sk-demo1-a1b2c3d4e5f6g7h8",
+    "base_url": "http://192.168.1.100:8000/proxy/v1",
+    "use": true,
+    "routing": {
+      "current": "small",
+      "force_current": false,
+      "models": {
+        "small": {
+          "name": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+          "api_key": "sk-xxx",
+          "base_url": "https://api.siliconflow.cn/v1",
+          "provider": "siliconflow",
+          "priority": 1
+        },
+        "big": {
+          "name": "Pro/deepseek-ai/DeepSeek-V3.2",
+          "api_key": "sk-xxx",
+          "base_url": "https://api.siliconflow.cn/v1",
+          "provider": "siliconflow",
+          "priority": 2
+        }
+      },
+      "keyword_switching": {
+        "enabled": true,
+        "rules": [
+          { "pattern": "@大哥", "target": "big" },
+          { "pattern": "@小弟", "target": "small" }
+        ]
+      }
+    },
+    "knowledge": {
+      "enabled": true,
+      "shared": true
+    },
+    "web_search": {
+      "enabled": true
+    }
+  }
+}
+```
+
+**说明**:
+- 返回完整的虚拟模型配置，包含新的可扩展路由结构
+- `routing.models` 包含所有模型配置（当前支持 small/big，未来可扩展）
+- `routing.keyword_switching.rules` 中的 `target` 可以是任意模型ID
+
+---
+
+#### 2.3.3 创建
+
+**POST** `/admin/ai/v1/virtual-models`
 
 **请求体**:
 ```json
@@ -388,29 +603,47 @@ Authorization: Bearer {proxy_key}
   "base_url": "http://192.168.1.100:8000/proxy/v1",
   "current": "small",
   "force_current": false,
+  "stream_support": true,
   "use": true,
   "small": {
     "model": "ollama/qwen2.5:7b",
     "api_key": "",
-    "base_url": "http://localhost:11434/v1",
-    "embedding_model": "nomic-embed-text"
+    "base_url": "http://localhost:11434/v1"
   },
   "big": {
     "model": "openai/gpt-4o",
     "api_key": "sk-xxxxxxxxxxxxxxxx",
     "base_url": "https://api.openai.com/v1"
   },
+  "routing": {
+    "keywords": {
+      "enable": false,
+      "rules": []
+    },
+    "skill": {
+      "enabled": true,
+      "version": "v1",
+      "custom": {
+        "enabled": false,
+        "version": "v2"
+      }
+    }
+  },
   "knowledge": {
     "enabled": true,
     "shared": true,
-    "skill": {"enabled": true, "version": "v1"},
-    "skill_custom": {"enabled": false, "version": null}
+    "system_default_skill": "v1",
+    "custom_skill": "v1",
+    "use_system_default": true,
+    "use_custom": false
   },
   "web_search": {
     "enabled": true,
-    "skill": {"enabled": true, "version": "v2"},
-    "skill_custom": {"enabled": false, "version": null},
-    "target": ["LibreX", "4get"]
+    "system_default_skill": "v1",
+    "custom_skill": "v1",
+    "use_system_default": true,
+    "use_custom": false,
+    "targets": ["searxng"]
   },
   "keyword_switching": {
     "enabled": false,
@@ -423,65 +656,98 @@ Authorization: Bearer {proxy_key}
 **响应**:
 ```json
 {
-  "success": true,
-  "message": "虚拟模型已创建",
-  "model": {...}
+  "code": 200,
+  "message": "模型创建成功",
+  "data": {...}
 }
 ```
 
-#### 2.3.3 更新
+#### 2.3.4 更新
 
-**PUT** `/admin/ai/v1/models/{name}`
+**PUT** `/admin/ai/v1/virtual-models/{name}`
 
 **请求体**: 同创建（部分字段可更新）
 
-#### 2.3.4 删除
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "模型更新成功",
+  "data": {...}
+}
+```
 
-**DELETE** `/admin/ai/v1/models/{name}`
+---
+
+#### 2.3.5 删除
+
+**DELETE** `/admin/ai/v1/virtual-models/{name}`
 
 **响应**:
 ```json
 {
-  "success": true,
-  "message": "虚拟模型已删除"
+  "code": 200,
+  "message": "模型删除成功",
+  "data": null
 }
 ```
 
-#### 2.3.5 刷新Proxy Key
+---
 
-**POST** `/admin/ai/v1/models/{name}/refresh-key`
+#### 2.3.6 切换当前模型
 
-**响应**:
-```json
-{
-  "success": true,
-  "message": "Proxy Key已刷新",
-  "new_key": "sk-zzzzzzzzzzzzzzzzz",
-  "new_key_masked": "sk-zzz...zzz"
-}
-```
-
-#### 2.3.6 测试模型连接
-
-**POST** `/admin/ai/v1/models/{name}/test`
+**POST** `/admin/ai/v1/virtual-models/{name}/switch`
 
 **请求体**:
 ```json
 {
-  "model_type": "small"  # small或big
+  "target": "small"
 }
 ```
 
 **响应**:
 ```json
 {
-  "success": true,
-  "message": "连接成功",
-  "latency_ms": 150,
-  "model_info": {
-    "id": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
-    "context_window": 8192
+  "code": 200,
+  "message": "已切换到小模型",
+  "data": {
+    "current": "small"
   }
+}
+```
+
+---
+
+#### 2.3.7 测试模型连接
+
+**POST** `/admin/ai/v1/models/test-connection`
+
+**请求体**:
+```json
+{
+  "model": "deepseek-ai/DeepSeek-R1",
+  "api_key": "sk-xxx",
+  "base_url": "https://api.siliconflow.cn/v1"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "连接成功",
+  "data": {
+    "latency_ms": 150
+  }
+}
+```
+
+**错误响应**:
+```json
+{
+  "code": 400,
+  "message": "模型名称和Base URL不能为空",
+  "data": null
 }
 ```
 
@@ -496,6 +762,66 @@ Authorization: Bearer {proxy_key}
 
 ---
 
+#### 2.3.8 添加新模型（可扩展架构）
+
+**POST** `/admin/ai/v1/virtual-models/{name}/models`
+
+**说明**: 为虚拟模型添加新的模型配置（支持扩展到N个模型）
+
+**路径参数**:
+- `name`: 虚拟模型名称
+
+**请求体**:
+```json
+{
+  "model_id": "coding",
+  "config": {
+    "name": "codellama/CodeLlama-70b-Instruct-hf",
+    "api_key": "sk-xxx",
+    "base_url": "https://api.siliconflow.cn/v1",
+    "provider": "siliconflow",
+    "priority": 3
+  }
+}
+```
+
+**请求字段说明**:
+- `model_id`: 模型ID（如 coding, vision, analysis 等）
+- `config.name`: 实际模型名称
+- `config.api_key`: API密钥
+- `config.base_url`: API基础URL
+- `config.provider`: 提供商（siliconflow/openai/ollama）
+- `config.priority`: 优先级（用于排序显示）
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "模型添加成功",
+  "data": {
+    "model_id": "coding",
+    "config": {
+      "name": "codellama/CodeLlama-70b-Instruct-hf",
+      "api_key": "sk-xxx",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "provider": "siliconflow",
+      "priority": 3
+    }
+  }
+}
+```
+
+**错误响应**:
+```json
+{
+  "code": 400,
+  "message": "模型ID已存在",
+  "data": null
+}
+```
+
+---
+
 ### 2.4 Skill管理
 
 #### 2.4.1 获取Skill列表
@@ -505,58 +831,96 @@ Authorization: Bearer {proxy_key}
 **响应**:
 ```json
 {
-  "categories": [
-    {
-      "name": "router",
-      "display_name": "模型路由",
-      "skills": [
-        {
-          "name": "关键词路由",
-          "version": "v1",
-          "type": "rule-based",
-          "system": {"enabled": true, "version": "v1"},
-          "custom": {"enabled": false, "version": "v2"}
-        },
-        {
-          "name": "意图识别",
-          "version": "v1",
-          "type": "llm-based",
-          "system": {"enabled": true, "version": "v1"},
-          "custom": {"enabled": true, "version": "v2"}
-        }
-      ]
-    }
-  ]
+  "code": 200,
+  "message": "success",
+  "data": {
+    "categories": [
+      {
+        "name": "router",
+        "display_name": "模型路由",
+        "skills": [
+          {
+            "name": "关键词路由",
+            "is_system": true,
+            "current_version": "v1",
+            "type": "rule-based"
+          },
+          {
+            "name": "意图识别",
+            "is_system": true,
+            "current_version": "v1",
+            "type": "llm-based"
+          },
+          {
+            "name": "X_skill",
+            "is_system": false,
+            "current_version": "v2",
+            "all_versions": ["v1", "v2", "v3"],
+            "type": "hybrid"
+          }
+        ]
+      },
+      {
+        "name": "virtual_models",
+        "display_name": "虚拟模型",
+        "skills": [
+          {
+            "name": "knowledge",
+            "is_system": true,
+            "current_version": "v1",
+            "type": "llm-based"
+          },
+          {
+            "name": "web_search",
+            "is_system": true,
+            "current_version": "v1",
+            "type": "llm-based"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
-#### 2.4.2 获取Skill详情
+**说明**: 
+- `is_system`: true 表示系统默认Skill（只读），false 表示自定义Skill（可编辑）
+- `all_versions`: 仅自定义Skill有此字段，列出所有可用版本
+- **架构说明**: 虽然每个虚拟模型在 `config.yml` 中都有独立的 `routing` 配置，但为了 Skill 管理的统一性，前端将 `router` 作为 `virtual_models` 的子节点展示
+
+#### 2.4.2 获取Skill详情（支持多版本）
 
 **GET** `/admin/ai/v1/skills/{category}/{name}`
+
+**查询参数**:
+- `is_custom`: true/false，是否为自定义Skill
+- `version`: 可选，指定获取特定版本的内容
 
 **响应**:
 ```json
 {
-  "name": "意图识别",
-  "category": "router",
-  "description": "基于LLM意图识别的模型路由",
-  "type": "llm-based",
-  "system": {
+  "code": 200,
+  "message": "success",
+  "data": {
+    "name": "X_skill",
+    "category": "router",
+    "is_custom": true,
+    "current_version": "v2",
+    "all_versions": ["v1", "v2", "v3"],
+    "description": "我的自定义路由逻辑",
+    "type": "hybrid",
     "enabled": true,
-    "version": "v1",
-    "path": "./skill/system/router/v1/意图识别",
-    "has_custom": true
-  },
-  "custom": {
-    "enabled": true,
-    "version": "v2",
-    "path": "./skill/custom/router/v2/意图识别",
-    "content": "SKILL.md完整内容"
-  },
-  "input_schema": {...},
-  "output_schema": {...}
+    "current_content": "当前版本(v2)的SKILL.md完整内容",
+    "input_schema": {...},
+    "output_schema": {...}
+  }
 }
 ```
+
+**说明**:
+- 如果指定 `version` 参数，返回该版本的 `current_content`
+- 如果不指定，返回 `current_version` 的内容
+- `all_versions` 列出该Skill的所有可用版本
 
 #### 2.4.3 更新Skill配置
 
@@ -572,25 +936,42 @@ Authorization: Bearer {proxy_key}
 }
 ```
 
-#### 2.4.4 编辑自定义Skill
+#### 2.4.4 编辑自定义Skill（指定版本）
 
-**PUT** `/admin/ai/v1/skills/{category}/{name}/custom`
+**PUT** `/admin/ai/v1/skills/{category}/{name}`
+
+**查询参数**:
+- `version`: 要编辑的版本（如 v1, v2, v3）
 
 **请求体**:
 ```json
 {
-  "content": "新的SKILL.md内容"
+  "content": "新的SKILL.md内容",
+  "save_mode": "update_current"
 }
 ```
+
+**说明**:
+- `save_mode`: 保存模式
+  - `update_current`: 更新当前版本（默认）
+  - `create_new`: 保存为新版本
+- 如果 `save_mode` 为 `create_new`，需要同时提供 `new_version` 字段
 
 **响应**:
 ```json
 {
-  "success": true,
+  "code": 200,
   "message": "Skill已更新",
-  "validation": {
-    "valid": true,
-    "errors": []
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "version": "v2",
+    "updated_at": "2026-02-14T21:30:00Z",
+    "validation": {
+      "valid": true,
+      "errors": [],
+      "warnings": []
+    }
   }
 }
 ```
@@ -609,13 +990,11 @@ Authorization: Bearer {proxy_key}
 }
 ```
 
-#### 2.4.6 获取Skill版本列表
+#### 2.4.6 获取某分类下所有Skills（支持多Skill）
 
-**GET** `/admin/ai/v1/skills/versions`
+**GET** `/admin/ai/v1/skills/{category}`
 
-**查询参数**:
-- `category`: Skill分类 (router, knowledge, web_search)
-- `skill_type`: Skill类型 (system/custom, 默认system)
+**说明**: 获取指定分类下的所有Skills（系统默认和自定义）
 
 **响应**:
 ```json
@@ -624,26 +1003,262 @@ Authorization: Bearer {proxy_key}
   "message": "success",
   "data": {
     "category": "router",
-    "skill_type": "system",
-    "versions": ["v1", "v2", "v3"]
+    "system_skills": [
+      {
+        "name": "关键词路由",
+        "current_version": "v1",
+        "all_versions": ["v1"],
+        "description": "基于关键词的模型路由",
+        "type": "rule-based",
+        "enabled": true
+      },
+      {
+        "name": "意图识别",
+        "current_version": "v1",
+        "all_versions": ["v1"],
+        "description": "基于LLM的意图识别路由",
+        "type": "llm-based",
+        "enabled": true
+      }
+    ],
+    "custom_skills": [
+      {
+        "name": "X_skill",
+        "current_version": "v2",
+        "all_versions": ["v1", "v2", "v3"],
+        "description": "我的自定义路由逻辑",
+        "type": "hybrid",
+        "enabled": true
+      },
+      {
+        "name": "Y_skill",
+        "current_version": "v1",
+        "all_versions": ["v1"],
+        "description": "另一个自定义路由",
+        "type": "llm-based",
+        "enabled": false
+      }
+    ]
   }
 }
 ```
 
-#### 2.4.6 重载单个Skill
+#### 2.4.7 获取Skill版本列表
 
-**POST** `/admin/ai/v1/skills/{category}/{name}/reload`
+**GET** `/admin/ai/v1/skills/{category}/{name}/versions`
+
+**查询参数**:
+- `is_custom`: 是否自定义 (true/false)
+
+**说明**: 
+- 获取指定Skill的所有可用版本
+- 支持系统默认和自定义Skill
 
 **响应**:
 ```json
 {
-  "success": true,
-  "message": "Skill已重载",
-  "skill": "router/意图识别"
+  "code": 200,
+  "message": "success",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "is_custom": true,
+    "current_version": "v2",
+    "versions": [
+      {
+        "version": "v1",
+        "created_at": "2026-01-15T10:30:00Z",
+        "is_active": false
+      },
+      {
+        "version": "v2",
+        "created_at": "2026-02-01T14:20:00Z",
+        "is_active": true
+      },
+      {
+        "version": "v3",
+        "created_at": "2026-02-10T09:15:00Z",
+        "is_active": false
+      }
+    ]
+  }
 }
 ```
 
-#### 2.4.7 获取Skill执行日志
+#### 2.4.8 创建自定义Skill
+
+**POST** `/admin/ai/v1/skills/{category}`
+
+**请求体**:
+```json
+{
+  "name": "X_skill",
+  "version": "v1",
+  "copy_from": {
+    "type": "system",
+    "skill_name": "关键词路由",
+    "version": "v1"
+  }
+}
+```
+
+**说明**:
+- `copy_from`: 可选，指定复制来源
+  - `type`: "system" 或 "custom"
+  - `skill_name`: 来源Skill名称
+  - `version`: 来源版本
+- 如果不指定 `copy_from`，则创建空白Skill模板
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "Skill创建成功",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "version": "v1",
+    "path": "./skill/custom/router/v1/X_skill"
+  }
+}
+```
+
+#### 2.4.9 创建新版本
+
+**POST** `/admin/ai/v1/skills/{category}/{name}/versions`
+
+**请求体**:
+```json
+{
+  "new_version": "v3",
+  "copy_from_version": "v2"
+}
+```
+
+**说明**:
+- 为现有自定义Skill创建新版本
+- `copy_from_version`: 可选，指定复制来源版本，默认为当前版本
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "版本创建成功",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "version": "v3",
+    "path": "./skill/custom/router/v3/X_skill"
+  }
+}
+```
+
+#### 2.4.10 删除自定义Skill
+
+**DELETE** `/admin/ai/v1/skills/{category}/{name}`
+
+**查询参数**:
+- `is_custom`: 必须指定为 true（只能删除自定义Skill）
+
+**说明**: 删除整个Skill及其所有版本
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "Skill已删除",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "deleted_versions": ["v1", "v2", "v3"]
+  }
+}
+```
+
+#### 2.4.11 删除版本
+
+**DELETE** `/admin/ai/v1/skills/{category}/{name}/versions/{version}`
+
+**说明**: 
+- 删除指定版本
+- 不能删除当前激活版本
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "版本已删除",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "version": "v1"
+  }
+}
+```
+
+#### 2.4.12 校验Skill内容
+
+**POST** `/admin/ai/v1/skills/validate`
+
+**请求体**:
+```json
+{
+  "content": "SKILL.md完整内容"
+}
+```
+
+**说明**: 
+- 校验SKILL.md内容格式
+- 不保存，仅返回校验结果
+- 用于编辑时的实时校验
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "valid": false,
+    "errors": [
+      {
+        "line": 15,
+        "column": 8,
+        "field": "output_schema.properties.result.type",
+        "message": "type值无效，应为 'integer' 而非 'int'"
+      }
+    ],
+    "warnings": [
+      {
+        "line": 10,
+        "message": "input_schema 缺少 description 字段",
+        "suggestion": "建议添加description以提高可读性"
+      }
+    ]
+  }
+}
+```
+
+#### 2.4.14 重载单个Skill
+
+**POST** `/admin/ai/v1/skills/{category}/{name}/reload`
+
+**查询参数**:
+- `version`: 可选，指定重载特定版本
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "Skill已重载",
+  "data": {
+    "category": "router",
+    "name": "X_skill",
+    "version": "v2"
+  }
+}
+```
+
+#### 2.4.15 获取Skill执行日志
 
 **GET** `/admin/ai/v1/skills/logs?category=router&name=意图识别&limit=50`
 
@@ -771,6 +1386,76 @@ Authorization: Bearer {proxy_key}
 #### 2.5.4 删除
 
 **DELETE** `/admin/ai/v1/conversations/{id}`
+
+#### 2.5.5 添加消息到对话
+
+**POST** `/admin/ai/v1/conversations/{conversation_id}/messages`
+
+**说明**: 向指定对话添加一条消息（通常由职责链内部调用）
+
+**请求头**:
+```http
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "role": "user",           // 必需: user/assistant/system
+  "content": "你好",        // 必需: 消息内容
+  "metadata": {             // 可选: 附加元数据
+    "model_used": "big",
+    "timestamp": "2026-01-01T12:00:00Z"
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "消息添加成功",
+  "data": null
+}
+```
+
+**错误响应**:
+```json
+{
+  "code": 404,
+  "message": "对话不存在",
+  "data": null
+}
+```
+
+#### 2.5.6 批量删除对话
+
+**DELETE** `/admin/ai/v1/conversations/batch`
+
+**请求体**:
+```json
+{
+  "ids": ["conv_001", "conv_002", "conv_003"]
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "已删除 3 个对话",
+  "data": {
+    "success_count": 3,
+    "failed_count": 0,
+    "failed_ids": []
+  }
+}
+```
+
+**说明**:
+- 批量删除多个对话
+- 返回成功删除的数量和失败的ID列表
+- 即使部分删除失败，也会继续处理其他ID
 
 ---
 
@@ -1330,12 +2015,16 @@ file: [OPML文件]
 **GET** `/admin/ai/v1/logs/skill?category=router&status=success&limit=100`
 
 **查询参数**:
-- `category`: Skill分类
+- `category`: Skill分类 (router, virtual_models, knowledge, web_search, rss, audio, video, text)
 - `name`: Skill名称
 - `status`: success/failed/validation_error
 - `start_time`: 开始时间
 - `end_time`: 结束时间
 - `limit`: 数量
+
+**说明**: 
+- `router`（模型路由）在 API 中是独立的 Skill 分类
+- **架构说明**: 虽然每个虚拟模型在 `config.yml` 中都有独立的 `routing` 配置，但为了 Skill 管理的统一性，前端将 `router` 作为 `virtual_models` 的子节点展示
 
 **响应**:
 ```json

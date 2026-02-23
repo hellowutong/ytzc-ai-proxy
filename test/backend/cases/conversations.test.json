@@ -94,6 +94,259 @@
       "assertions": [
         "assert success is True"
       ]
+    },
+    {
+      "id": "TC006",
+      "name": "test_list_conversations_returns_messages_preview",
+      "description": "测试列表API返回最近5条消息预览",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "conversation", "messages_preview"],
+      "inputs": {
+        "virtual_model": "demo1",
+        "limit": 10
+      },
+      "expected": {
+        "success": true,
+        "has_messages": true,
+        "has_message_count": true
+      },
+      "assertions": [
+        "assert response.code == 200",
+        "assert 'items' in response.data",
+        "assert len(response.data['items']) > 0",
+        "assert 'messages' in response.data['items'][0]",
+        "assert 'message_count' in response.data['items'][0]"
+      ]
+    },
+    {
+      "id": "TC007",
+      "name": "test_delete_conversation_with_objectid",
+      "description": "测试使用ObjectId格式删除会话",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "conversation", "objectid"],
+      "inputs": {
+        "conversation_id": "507f1f77bcf86cd799439011"
+      },
+      "expected": {
+        "success": true
+      },
+      "assertions": [
+        "assert response.code == 200 or response.code == 404"
+      ]
+    },
+    {
+      "id": "TC020",
+      "name": "test_batch_delete_conversations_success",
+      "description": "测试批量删除对话成功",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "conversation", "batch_delete"],
+      "inputs": {
+        "request": {
+          "method": "DELETE",
+          "url": "/admin/ai/v1/conversations/batch",
+          "body": {
+            "ids": ["conv_001", "conv_002", "conv_003"]
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "message": "已删除 3 个对话",
+          "data": {
+            "success_count": 3,
+            "failed_count": 0,
+            "failed_ids": []
+          }
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 200",
+        "assert response.json()['data']['success_count'] == 3"
+      ]
+    },
+    {
+      "id": "TC021",
+      "name": "test_batch_delete_conversations_partial_failure",
+      "description": "测试批量删除部分失败",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["partial", "conversation", "batch_delete"],
+      "inputs": {
+        "request": {
+          "method": "DELETE",
+          "url": "/admin/ai/v1/conversations/batch",
+          "body": {
+            "ids": ["conv_001", "conv_not_exist", "conv_003"]
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "message": "已删除 2 个对话",
+          "data": {
+            "success_count": 2,
+            "failed_count": 1,
+            "failed_ids": ["conv_not_exist"]
+          }
+        }
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['data']['success_count'] == 2",
+        "assert response.json()['data']['failed_count'] == 1",
+        "assert 'conv_not_exist' in response.json()['data']['failed_ids']"
+      ]
+    },
+    {
+      "id": "TC022",
+      "name": "test_batch_delete_empty_ids",
+      "description": "测试批量删除空ID列表",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["negative", "conversation", "batch_delete", "validation"],
+      "inputs": {
+        "request": {
+          "method": "DELETE",
+          "url": "/admin/ai/v1/conversations/batch",
+          "body": {
+            "ids": []
+          }
+        }
+      },
+      "expected": {
+        "status_code": 400,
+        "error_message": "未提供对话ID列表"
+      },
+      "assertions": [
+        "assert response.status_code == 400",
+        "assert '未提供' in response.json()['detail'] or 'ids' in response.json()['detail'].lower()"
+      ]
+    },
+    {
+      "id": "TC023",
+      "name": "test_batch_delete_missing_ids_field",
+      "description": "测试批量删除请求缺少ids字段",
+      "category": "api",
+      "priority": "P1",
+      "tags": ["negative", "conversation", "batch_delete", "validation"],
+      "inputs": {
+        "request": {
+          "method": "DELETE",
+          "url": "/admin/ai/v1/conversations/batch",
+          "body": {}
+        }
+      },
+      "expected": {
+        "status_code": 400
+      },
+      "assertions": [
+        "assert response.status_code == 400"
+      ]
+    },
+    {
+      "id": "TC024",
+      "name": "test_batch_delete_single_id",
+      "description": "测试批量删除单个对话（边界情况）",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["boundary", "conversation", "batch_delete"],
+      "inputs": {
+        "request": {
+          "method": "DELETE",
+          "url": "/admin/ai/v1/conversations/batch",
+          "body": {
+            "ids": ["conv_001"]
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "data": {
+            "success_count": 1,
+            "failed_count": 0
+          }
+        }
+      },
+      "assertions": [
+        "assert response.json()['data']['success_count'] == 1"
+      ]
+    },
+    {
+      "id": "TC025",
+      "name": "test_fingerprint_creates_new_conversation",
+      "description": "测试指纹方法创建新对话",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "conversation", "fingerprint", "chatbox"],
+      "inputs": {
+        "fingerprint": "abc123fingerprint",
+        "virtual_model": "demo1"
+      },
+      "expected": {
+        "success": true,
+        "creates_new": true
+      },
+      "assertions": [
+        "conversation_id = await cm.get_or_create_by_fingerprint('abc123fingerprint', 'demo1')",
+        "assert conversation_id is not None"
+      ]
+    },
+    {
+      "id": "TC026",
+      "name": "test_fingerprint_reuses_existing_conversation",
+      "description": "测试指纹方法复用现有对话（同一指纹30分钟内）",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["positive", "conversation", "fingerprint", "chatbox"],
+      "inputs": {
+        "fingerprint": "def456fingerprint",
+        "virtual_model": "demo1"
+      },
+      "expected": {
+        "reuses_existing": true
+      },
+      "assertions": [
+        "id1 = await cm.get_or_create_by_fingerprint('def456fingerprint', 'demo1')",
+        "id2 = await cm.get_or_create_by_fingerprint('def456fingerprint', 'demo1')",
+        "assert id1 == id2"
+      ]
+    },
+    {
+      "id": "TC027",
+      "name": "test_chatbox_conversation_tracking",
+      "description": "测试ChatBox多轮对话正确记录在同一会话",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["positive", "chatbox", "multi_turn"],
+      "inputs": {
+        "messages": [
+          {"role": "user", "content": "你好"},
+          {"role": "assistant", "content": "你好，有什么可以帮助？"},
+          {"role": "user", "content": "你是谁"}
+        ]
+      },
+      "expected": {
+        "single_conversation": true,
+        "message_count": 3
+      },
+      "assertions": [
+        "conv_id = first conversation_id from fingerprint",
+        "await cm.add_message(conv_id, 'user', '你好')",
+        "await cm.add_message(conv_id, 'assistant', '你好，有什么可以帮助？')",
+        "await cm.add_message(conv_id, 'user', '你是谁')",
+        "conv = await cm.get_conversation(conv_id)",
+        "assert len(conv.messages) == 3"
+      ]
     }
   ]
 }

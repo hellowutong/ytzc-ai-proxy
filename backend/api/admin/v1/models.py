@@ -81,8 +81,10 @@ class RoutingConfig(BaseModel):
 class VirtualModel(BaseModel):
     name: str
     proxy_key: str = ""
+    base_url: Optional[str] = ""
     current: Literal["small", "big"] = "small"
     force_current: bool = False
+    stream_support: bool = True  # 是否支持流式返回
     use: bool = True
     small: ModelConfig = Field(default_factory=ModelConfig)
     big: ModelConfig = Field(default_factory=ModelConfig)
@@ -136,10 +138,29 @@ def _update_model_in_config(config_manager: ConfigManager, old_name: str, new_na
 async def get_virtual_models(config_manager: ConfigManager = Depends(get_config_manager)):
     """获取所有虚拟模型"""
     models = _get_virtual_models_from_config(config_manager)
+    # 使用Pydantic模型验证并序列化，确保字段名统一
+    validated_models = []
+    for model_data in models:
+        try:
+            # 处理字段名不一致问题（force-current -> force_current）
+            if 'force-current' in model_data:
+                model_data['force_current'] = model_data.pop('force-current')
+            if 'force' in model_data and 'force_current' not in model_data:
+                model_data['force_current'] = model_data.pop('force')
+            
+            validated_model = VirtualModel(**model_data)
+            validated_models.append(validated_model.model_dump())
+        except Exception as e:
+            # 如果验证失败，跳过该模型并记录错误
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"验证虚拟模型失败 {model_data.get('name', 'unknown')}: {e}")
+            continue
+    
     return {
         "code": 200,
         "message": "success",
-        "data": models
+        "data": validated_models
     }
 
 

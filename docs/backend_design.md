@@ -498,6 +498,63 @@ class KnowledgeExtractorFactory:
 
 ---
 
+### 2.6 存储层实现状态
+
+**状态**: ✅ **已实现** (2026-02-14)
+
+存储层抽象架构已按照第2.1-2.5节的设计完整实现，代码位于 `backend/core/repositories/` 目录。
+
+**实现的文件结构**:
+```
+backend/core/repositories/
+├── __init__.py          # 模块导出和适配器自动注册
+├── interfaces.py        # 抽象接口定义（IDocumentRepository, IVectorRepository, ICacheRepository）
+├── factory.py           # RepositoryFactory 工厂类
+├── mongodb_adapter.py   # MongoDB适配器实现
+├── qdrant_adapter.py    # Qdrant向量存储适配器实现
+└── redis_adapter.py     # Redis缓存适配器实现
+```
+
+**实现的功能**:
+1. ✅ 完整的抽象接口定义（interfaces.py）
+   - StorageType, VectorDBType, CacheType 枚举
+   - IDocumentRepository: 6个抽象方法
+   - IVectorRepository: 6个抽象方法
+   - ICacheRepository: 7个抽象方法
+
+2. ✅ 工厂模式实现（factory.py）
+   - RepositoryFactory 类
+   - 自动注册机制
+   - 配置驱动的仓库创建
+
+3. ✅ 具体适配器实现
+   - MongoDBAdapter: 使用 Motor 实现异步 MongoDB 操作
+   - QdrantAdapter: 使用 Qdrant 客户端实现向量存储
+   - RedisAdapter: 使用 Redis-py 实现缓存和队列
+
+4. ✅ 自动注册
+   - 在 `__init__.py` 中自动注册所有默认适配器
+   - 支持通过配置切换存储后端
+
+**使用示例**:
+```python
+from core.repositories import RepositoryFactory
+
+# 创建文档存储仓库
+doc_repo = RepositoryFactory.create_document_repository({
+    "type": "mongodb",
+    "host": "localhost",
+    "port": 27017,
+    "database": "ai_gateway"
+})
+
+# 连接并使用
+await doc_repo.connect()
+doc_id = await doc_repo.insert_one("users", {"name": "Alice"})
+```
+
+---
+
 ## 3. 目录结构
 
 ```
@@ -677,8 +734,21 @@ class ConfigManager:
     def load_config(self) -> Dict[str, Any]:
         # 加载YAML文件
         
-    def validate_config(self, config: Dict) -> Tuple[bool, List[str]]:
-        # 使用Pydantic模型验证配置
+    def validate_config(self, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """
+        验证配置（占位实现）
+        
+        此方法为技能配置验证的占位实现，待技能系统完善后再实现具体逻辑。
+        当前直接返回验证通过。
+        
+        Args:
+            config: 配置字典
+            
+        Returns:
+            Tuple[bool, List[str]]: (是否通过, 错误信息列表)
+        """
+        # 占位实现：待技能系统完善后实现具体验证逻辑
+        return True, []
         
     def reload_config(self) -> bool:
         # 热重载配置
@@ -706,16 +776,80 @@ class StorageConfig(BaseModel):
     qdrant: QdrantConfig
     redis: RedisConfig
 
+class ModelConfig(BaseModel):
+    """单个模型配置（可扩展）"""
+    name: str  # 模型名称（如 deepseek-ai/DeepSeek-V3）
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    provider: str = "siliconflow"  # 提供商
+    priority: int = 1  # 显示优先级
+
+class KeywordRule(BaseModel):
+    """关键词规则"""
+    pattern: str  # 匹配模式
+    target: str  # 目标模型ID（任意字符串，不限于small/big）
+
+class KeywordSwitchingConfig(BaseModel):
+    """关键词切换配置"""
+    enabled: bool = False
+    rules: List[KeywordRule] = Field(default_factory=list)
+
+class RoutingConfig(BaseModel):
+    """路由配置（核心可扩展部分）"""
+    current: str = "small"  # 当前默认模型ID（任意字符串）
+    force_current: bool = False  # 是否强制
+    models: Dict[str, ModelConfig] = Field(default_factory=dict)  # 动态模型列表
+    keyword_switching: KeywordSwitchingConfig = Field(default_factory=KeywordSwitchingConfig)
+
+class KeywordConfig(BaseModel):
+    """关键词模型切换配置（传统方式）"""
+    enabled: bool = False
+    small_keywords: List[str] = Field(default_factory=list, max_length=50)
+    big_keywords: List[str] = Field(default_factory=list, max_length=50)
+
+
+class RoutingKeywordsConfig(BaseModel):
+    """路由关键词配置（新方式）"""
+    enable: bool = False  # 注意：使用enable不是enabled
+    rules: List[KeywordRule] = Field(default_factory=list)
+
+
+class RoutingSkillConfig(BaseModel):
+    """路由Skill配置"""
+    enabled: bool = True
+    version: str = "v1"
+    custom: Dict[str, Any] = Field(default_factory=lambda: {"enabled": False, "version": "v2"})
+
+
+class RoutingConfig(BaseModel):
+    """虚拟模型路由配置（替代全局router）"""
+    keywords: RoutingKeywordsConfig = Field(default_factory=RoutingKeywordsConfig)
+    skill: RoutingSkillConfig = Field(default_factory=RoutingSkillConfig)
+
+
 class VirtualModelConfig(BaseModel):
+    """虚拟模型配置 - 对应实际代码实现"""
+    name: str
     proxy_key: str
-    base_url: str
-    current: str  # "small" | "big"
-    force_current: bool
-    use: bool
-    small: ModelEndpointConfig
-    big: ModelEndpointConfig
-    knowledge: KnowledgeFeatureConfig
-    web_search: WebSearchFeatureConfig
+    base_url: Optional[str] = None
+    current: Literal["small", "big"] = "small"  # 当前默认模型
+    force_current: bool = False  # 是否强制使用当前模型
+    stream_support: bool = True  # 是否支持流式返回
+    use: bool = True  # 是否启用
+    
+    # 模型配置（固定small/big两个模型）
+    small: ModelConfig = Field(default_factory=ModelConfig)
+    big: ModelConfig = Field(default_factory=ModelConfig)
+    
+    # 新增：虚拟模型独立路由配置
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
+    
+    # 传统关键词切换配置（与routing.keywords并存）
+    keyword_switching: KeywordConfig = Field(default_factory=KeywordConfig)
+    
+    # 功能配置
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
 
 class AIGatewayConfig(BaseModel):
     router: RouterConfig
@@ -730,12 +864,35 @@ class AIGatewayConfig(BaseModel):
 
 ### 3.2 Skill管理器 (SkillManager)
 
-**职责**: Skill的发现、加载、验证、执行、重载
+**职责**: Skill的发现、加载、验证、执行、重载；支持多Skill管理和多版本控制
+
+**目录结构**:
+```
+skills/
+├── system/
+│   └── router/
+│       └── v1/
+│           ├── 关键词路由/
+│           │   └── SKILL.md
+│           └── 意图识别/
+│               └── SKILL.md
+├── custom/
+│   └── router/
+│       ├── v1/
+│       │   └── X_skill/
+│       │       └── SKILL.md
+│       └── v2/
+│           └── X_skill/
+│               └── SKILL.md
+│       └── v1/
+│           └── Y_skill/
+│               └── SKILL.md
+```
 
 **类设计**:
 ```python
 class SkillManager:
-    _skills: Dict[str, SkillInfo] = {}  # category/name -> SkillInfo
+    _skills: Dict[str, Dict[str, SkillVersions]] = {}  # category -> {name -> versions}
     _config_manager: ConfigManager
     
     def __init__(self, config_manager: ConfigManager):
@@ -744,19 +901,31 @@ class SkillManager:
     
     def _load_all_skills(self):
         # 遍历skill/system/和skill/custom/目录
-        # 根据config.yml中的配置决定加载哪些版本
+        # 加载所有分类、所有Skill、所有版本
+        # 结构: category -> skill_name -> {version -> SkillInfo}
         
     def _load_skill(self, category: str, name: str, 
                     is_custom: bool, version: str) -> Optional[SkillInfo]:
-        # 加载单个Skill
+        # 加载单个Skill的特定版本
         # 1. 读取SKILL.md
         # 2. 验证YAML frontmatter
         # 3. 如果有.py文件，动态导入
         
-    def get_skill(self, category: str, name: str) -> Optional[SkillInfo]:
+    def get_skill(self, category: str, name: str, 
+                  version: Optional[str] = None) -> Optional[SkillInfo]:
         # 获取Skill信息
+        # 如果不指定version，返回当前激活版本
+        
+    def get_skills_by_category(self, category: str) -> List[SkillSummary]:
+        # 获取某分类下所有Skill列表
+        # 包括系统默认和自定义Skills
+        
+    def get_skill_versions(self, category: str, name: str,
+                          is_custom: bool) -> List[str]:
+        # 获取指定Skill的所有可用版本
         
     async def execute(self, category: str, name: str, 
+                     version: Optional[str] = None,
                      **kwargs) -> Dict[str, Any]:
         # 执行Skill
         # 1. 验证输入参数（JSON Schema）
@@ -765,15 +934,50 @@ class SkillManager:
         # 4. 记录执行日志
         # 5. 返回结果
         
+    def create_skill(self, category: str, name: str,
+                     version: str, content: str,
+                     copy_from: Optional[str] = None) -> bool:
+        # 创建新的自定义Skill
+        # 1. 检查名称是否已存在（同一分类）
+        # 2. 创建目录结构
+        # 3. 写入SKILL.md
+        # 4. 加载并验证
+        
+    def create_version(self, category: str, name: str,
+                       new_version: str, copy_from: str) -> bool:
+        # 为现有Skill创建新版本
+        # 1. 复制指定版本内容
+        # 2. 更新版本号
+        # 3. 保存到新目录
+        
+    def update_skill(self, category: str, name: str,
+                     version: str, content: str) -> bool:
+        # 更新指定版本的Skill内容
+        # 1. 验证内容格式
+        # 2. 备份原文件
+        # 3. 写入新内容
+        # 4. 重新加载
+        
+    def delete_skill(self, category: str, name: str,
+                     is_custom: bool) -> bool:
+        # 删除整个Skill（所有版本）
+        # 仅允许删除自定义Skill
+        
+    def delete_version(self, category: str, name: str,
+                       version: str) -> bool:
+        # 删除指定版本
+        # 不能删除当前激活版本
+        
     def reload_skill(self, category: str, name: str) -> bool:
-        # 重载单个Skill
+        # 重载单个Skill的所有版本
         
     def reload_all(self) -> Dict[str, int]:
         # 重载所有Skill
         # 返回统计信息：成功数、失败数
         
-    def get_skill_list(self) -> List[SkillListItem]:
-        # 获取Skill列表（用于前端展示）
+    def validate_skill(self, content: str) -> ValidationResult:
+        # 校验Skill内容
+        # 返回：是否通过、错误列表、警告列表
 ```
 
 **Skill信息结构**:
@@ -800,6 +1004,34 @@ class SkillInfo:
     file_path: str
     has_py_file: bool
     execute_func: Optional[Callable] = None
+    created_at: datetime
+    updated_at: datetime
+
+class SkillSummary:
+    # 用于列表展示
+    category: str
+    name: str
+    is_custom: bool
+    current_version: str
+    all_versions: List[str]
+    description: str
+    enabled: bool
+
+class ValidationResult:
+    valid: bool
+    errors: List[ValidationError]
+    warnings: List[ValidationWarning]
+
+class ValidationError:
+    line: int
+    column: int
+    message: str
+    field: Optional[str]  # 如 "name", "input_schema.properties.x"
+
+class ValidationWarning:
+    line: int
+    message: str
+    suggestion: str
 ```
 
 ---
@@ -886,6 +1118,691 @@ class ModelRouter:
 **职责**: 对话的创建、查询、保存、删除
 
 **类设计**:
+
+---
+
+### 3.5 对话处理管道（Chat Pipeline）
+
+**职责**: 使用职责链模式（Chain of Responsibility）处理对话请求，实现可扩展的对话处理流程。
+
+**解决的问题**:
+- 当前 `chat.py` 一个函数处理所有逻辑，难以维护和扩展
+- 对话历史保存逻辑散落在各处，容易遗漏
+- 无法灵活添加预处理（知识检索、联网搜索）和后处理（压缩、总结）
+
+**设计决策**:
+- **响应方式**: 统一非流式（一次返回完整响应），简化处理逻辑
+- **错误处理**: 即使LLM调用失败，也要保存用户消息，确保数据不丢失
+- **Raw数据归档**: 永久保留完整请求/响应，根据 `config.yml` 中 `log.system.retention.days` 自动清理
+- **预留接口**: Knowledge和WebSearch预留，读取配置但不实现核心逻辑
+- **4get搜索**: 保留空目录，代码中做空实现
+
+#### 3.5.1 职责链执行流程
+
+```
+Phase 1: 输入处理层（必须）
+  1. InputValidatorHandler       - 输入验证、安全过滤
+  2. UserMessagePersistence     - 💾 保存用户原始提问（最高优先级）
+
+Phase 2: 预处理层（预留接口）
+  3. KnowledgeRetrievalHandler  - 📚 知识库检索（预留，读取配置）
+  4. WebSearchHandler           - 🔍 联网搜索（预留，读取配置，4get空实现）
+
+Phase 3: 模型层（必须）
+  5. ModelRoutingHandler        - 🎯 模型路由决策
+  6. LLMInvocationHandler       - 🤖 调用远程LLM（已完整实现）
+
+Phase 4: 后处理层（必须+归档）
+  7. AssistantMessagePersistence - 💾 保存助手回复
+  8. RawDataArchiveHandler      - 📦 完整数据归档（永久保留）
+
+Phase 5: 输出层（必须）
+  9. ResponseFormatter          - 📤 格式化JSON响应
+```
+
+**重要说明**：
+- **统一入口**: 所有客户端（WebChat/ChatBox/第三方API）都通过 `/proxy/ai/v1/chat/completions` 接口访问，统一经过职责链处理
+- **自动保存**: 用户消息和助手回复在职责链中自动保存到MongoDB，前端无需手动调用保存API
+- **完整实现**: LLMInvocationHandler 已完整实现，支持 OpenAI/SiliconFlow/Ollama 三种提供商
+
+#### 3.5.2 核心类设计
+
+```python
+# core/chat_pipeline.py
+
+from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field
+from datetime import datetime
+import time
+import uuid
+
+
+@dataclass
+class ChatContext:
+    """对话上下文 - 在职责链中传递"""
+    # 输入
+    conversation_id: Optional[str] = None
+    virtual_model: str = ""
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    user_message: str = ""
+    stream: bool = False
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    
+    # 处理结果
+    model_type: Optional[str] = None  # "small" | "big"
+    model_config: Optional[Dict] = None
+    response_content: str = ""
+    
+    # 元数据
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    request_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    start_time: float = field(default_factory=time.time)
+    user_message_saved: bool = False
+    error_occurred: bool = False
+    skip_reason: Optional[str] = None
+
+
+class PipelineHandler:
+    """处理器基类"""
+    
+    def __init__(self, name: str):
+        self.name = name
+        self._next: Optional['PipelineHandler'] = None
+    
+    def set_next(self, handler: 'PipelineHandler') -> 'PipelineHandler':
+        """设置下一个处理器"""
+        self._next = handler
+        return handler
+    
+    async def handle(self, context: ChatContext) -> ChatContext:
+        """处理逻辑"""
+        context = await self._process(context)
+        
+        # 如果没有跳过后续处理的标记，继续执行链
+        if self._next and not context.skip_reason and not context.error_occurred:
+            return await self._next.handle(context)
+        return context
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        """子类实现具体逻辑"""
+        raise NotImplementedError
+
+
+class ChatPipeline:
+    """对话管道 - 组装职责链"""
+    
+    def __init__(
+        self,
+        conversation_manager,
+        skill_manager,
+        config_manager,
+        knowledge_manager=None,
+        model_router=None
+    ):
+        self._cm = conversation_manager
+        self._sm = skill_manager
+        self._config = config_manager
+        self._km = knowledge_manager
+        self._router = model_router
+        
+        # 构建职责链
+        self._chain = self._build_chain()
+    
+    def _build_chain(self) -> PipelineHandler:
+        """构建处理链"""
+        
+        # Phase 1: 输入处理
+        validator = InputValidatorHandler()
+        user_persistence = UserMessagePersistence(self._cm)
+        
+        # Phase 2: 预处理（预留接口）
+        knowledge = KnowledgeRetrievalHandler(self._config, self._sm)
+        web_search = WebSearchHandler(self._config, self._sm)
+        
+        # Phase 3: 模型层
+        routing = ModelRoutingHandler(self._router, self._config)
+        llm = LLMInvocationHandler(self._config)
+        
+        # Phase 4: 后处理
+        assistant_persistence = AssistantMessagePersistence(self._cm)
+        raw_archive = RawDataArchiveHandler(self._cm)
+        
+        # Phase 5: 输出
+        formatter = ResponseFormatter()
+        
+        # 组装链条
+        validator.set_next(user_persistence) \
+                 .set_next(knowledge) \
+                 .set_next(web_search) \
+                 .set_next(routing) \
+                 .set_next(llm) \
+                 .set_next(assistant_persistence) \
+                 .set_next(raw_archive) \
+                 .set_next(formatter)
+        
+        return validator
+    
+    async def process(self, context: ChatContext) -> ChatContext:
+        """执行管道处理"""
+        return await self._chain.handle(context)
+```
+
+#### 3.5.3 核心Handler实现
+
+**UserMessagePersistence**（最先执行，确保不丢失）:
+
+```python
+class UserMessagePersistence(PipelineHandler):
+    """保存用户原始提问 - 最高优先级"""
+    
+    def __init__(self, conversation_manager):
+        super().__init__("UserMessagePersistence")
+        self._cm = conversation_manager
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        # 确保有conversation_id
+        if not context.conversation_id:
+            context.conversation_id = await self._cm.create_conversation(
+                context.virtual_model
+            )
+        
+        # 立即保存用户消息（不等待后续处理）
+        await self._cm.add_message(
+            conversation_id=context.conversation_id,
+            role="user",
+            content=context.user_message,
+            metadata={
+                "timestamp": datetime.utcnow().isoformat(),
+                "request_id": context.request_id,
+                "source": "webchat",
+                "ip": context.metadata.get("client_ip")
+            }
+        )
+        
+        context.user_message_saved = True
+        logger.info(f"💾 [{context.request_id}] 用户消息已持久化: {context.conversation_id}")
+        return context
+```
+
+**KnowledgeRetrievalHandler**（预留接口）:
+
+```python
+class KnowledgeRetrievalHandler(PipelineHandler):
+    """知识库检索 - 当前预留接口，读取配置但不实现核心逻辑"""
+    
+    def __init__(self, config_manager, skill_manager):
+        super().__init__("KnowledgeRetrievalHandler")
+        self._config = config_manager
+        self._sm = skill_manager
+    
+    def _get_knowledge_config(self, virtual_model: str) -> Dict:
+        """从config.yml读取知识库配置"""
+        return self._config.get(
+            f"ai-gateway.virtual_models.{virtual_model}.knowledge", 
+            {}
+        )
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        # 读取配置
+        config = self._get_knowledge_config(context.virtual_model)
+        
+        if not config.get("enabled", False):
+            return context  # 未启用，直接跳过
+        
+        # 预留：检查Skill配置
+        skill_config = config.get("skill", {})
+        if skill_config.get("enabled") and skill_config.get("version"):
+            # 预留调用Skill的代码，当前不实现
+            # result = await self._sm.execute(
+            #     "knowledge", f"检索/{skill_config['version']}",
+            #     query=context.user_message
+            # )
+            pass
+        
+        # 记录元数据
+        context.metadata["knowledge_checked"] = True
+        context.metadata["knowledge_enabled"] = True
+        context.metadata["knowledge_skill_version"] = skill_config.get("version")
+        
+        logger.info(f"📚 [{context.request_id}] 知识库检索已预留（配置启用，暂未实现）")
+        return context
+```
+
+**WebSearchHandler**（预留接口，4get空实现）:
+
+```python
+class WebSearchHandler(PipelineHandler):
+    """联网搜索 - 预留接口，4get空实现"""
+    
+    def __init__(self, config_manager, skill_manager):
+        super().__init__("WebSearchHandler")
+        self._config = config_manager
+        self._sm = skill_manager
+    
+    def _get_web_search_config(self, virtual_model: str) -> Dict:
+        """从config.yml读取联网搜索配置"""
+        return self._config.get(
+            f"ai-gateway.virtual_models.{virtual_model}.web_search",
+            {}
+        )
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        config = self._get_web_search_config(context.virtual_model)
+        
+        if not config.get("enabled", False):
+            return context
+        
+        targets = config.get("target", [])
+        
+        # 4get 空实现（保留目录）
+        if "4get" in targets:
+            logger.info(f"🔍 [{context.request_id}] 4get搜索 - 空实现（目录保留）")
+        
+        # LibreX 预留
+        if "LibreX" in targets:
+            logger.info(f"🔍 [{context.request_id}] LibreX搜索 - 预留接口")
+        
+        # Skill预留
+        skill_config = config.get("skill", {})
+        if skill_config.get("enabled"):
+            logger.info(f"🔍 [{context.request_id}] WebSearch Skill预留（版本: {skill_config.get('version')}）")
+        
+        context.metadata["web_search_checked"] = True
+        context.metadata["web_search_targets"] = targets
+        
+        return context
+```
+
+**ModelRoutingHandler**（模型路由 + 关键词替换）:
+
+```python
+class ModelRoutingHandler(PipelineHandler):
+    """模型路由决策处理器 - 包含关键词匹配和替换功能"""
+    
+    def __init__(self, model_router, config_manager=None):
+        super().__init__("ModelRoutingHandler")
+        self._router = model_router
+        self._config = config_manager
+    
+    def _get_keyword_config(self, virtual_model: str) -> Dict:
+        """从config.yml读取关键词路由配置"""
+        return self._config.get(
+            f"ai-gateway.virtual_models.{virtual_model}.routing.keywords",
+            {}
+        )
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        """执行模型路由决策 + 关键词替换"""
+        
+        # 1. 首先尝试关键词匹配和替换
+        keyword_config = self._get_keyword_config(context.virtual_model)
+        
+        if keyword_config.get("enabled", False):
+            rules = keyword_config.get("rules", [])
+            
+            for rule in rules:
+                pattern = rule.get("pattern", "")
+                target = rule.get("target", "small")
+                
+                if pattern in context.user_message:
+                    # 匹配成功：切换模型
+                    context.model_type = target
+                    context.metadata["model_type"] = target
+                    context.metadata["route_reason"] = f"关键词匹配: {pattern}"
+                    context.metadata["matched_keyword"] = pattern
+                    
+                    # 记录原始消息
+                    context.metadata["original_user_message"] = context.user_message
+                    
+                    # 移除关键词
+                    context.user_message = context.user_message.replace(pattern, "").strip()
+                    context.metadata["processed_user_message"] = context.user_message
+                    
+                    logger.info(f"🎯 [{context.request_id}] 关键词匹配: {pattern} -> {target}")
+                    logger.info(f"📝 [{context.request_id}] 消息替换: '{pattern}' -> ''")
+                    logger.info(f"📝 [{context.request_id}] 最终消息: '{context.user_message}'")
+                    
+                    # 匹配成功，跳过后续的ModelRouter.route()调用
+                    return context
+        
+        # 2. 如果没有匹配关键词，继续原有ModelRouter.route()逻辑
+        try:
+            route_result = await self._router.route(
+                virtual_model=context.virtual_model,
+                user_input=context.user_message,
+                conversation_id=context.conversation_id
+            )
+            
+            context.model_type = route_result.model_type
+            context.metadata["model_type"] = route_result.model_type
+            context.metadata["route_reason"] = route_result.reason
+            context.metadata["route_confidence"] = route_result.confidence
+            context.metadata["matched_rule"] = route_result.matched_rule
+            
+            logger.info(f"🎯 [{context.request_id}] 路由决策: {route_result.model_type} - {route_result.reason}")
+            
+        except Exception as e:
+            logger.error(f"❌ [{context.request_id}] 路由决策失败: {e}")
+            # 路由失败时使用默认值
+            context.model_type = "small"
+            context.metadata["route_error"] = str(e)
+            context.metadata["route_reason"] = "路由失败，使用默认模型"
+        
+        return context
+```
+
+**LLMInvocationHandler**（实际调用LLM服务）:
+
+```python
+class LLMInvocationHandler(PipelineHandler):
+    """LLM调用处理器"""
+    
+    def __init__(self, config_manager):
+        super().__init__("LLMInvocationHandler")
+        self._config = config_manager
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        """调用远程LLM"""
+        # 检查是否需要跳过（纯关键词切换）
+        if context.skip_reason == "keyword_only_switch":
+            return context
+        
+        # 检查模型类型
+        if not context.model_type:
+            logger.warning(f"[{context.request_id}] model_type未设置，使用默认small模型")
+            context.model_type = "small"
+        
+        try:
+            # 动态导入以避免循环依赖
+            from services.llm_service import LLMServiceFactory, ModelProvider
+            from models.base import ChatCompletionRequest, Message
+            
+            # 获取虚拟模型配置
+            vm_config = self._config.get(f"ai-gateway.virtual_models.{context.virtual_model}")
+            if not vm_config:
+                raise ValueError(f"虚拟模型配置不存在: {context.virtual_model}")
+            
+            # 获取具体模型配置
+            model_config = vm_config.get(context.model_type, {})
+            if not model_config:
+                raise ValueError(f"模型类型配置不存在: {context.model_type}")
+            
+            # 确定提供商
+            provider_str = model_config.get("provider", "siliconflow").lower()
+            if provider_str == "openai":
+                provider = ModelProvider.OPENAI
+            elif provider_str == "ollama":
+                provider = ModelProvider.OLLAMA
+            else:
+                provider = ModelProvider.SILICONFLOW
+            
+            # 创建LLM服务
+            llm_service = LLMServiceFactory.create(
+                provider=provider,
+                base_url=model_config.get("base_url", "https://api.siliconflow.cn/v1"),
+                api_key=model_config.get("api_key"),
+                model=model_config.get("model", "Qwen/Qwen2.5-7B-Instruct"),
+                temperature=context.temperature,
+                max_tokens=context.max_tokens
+            )
+            
+            # 构建请求
+            chat_request = ChatCompletionRequest(
+                model=model_config.get("model", "unknown"),
+                messages=[
+                    Message(role=msg.get("role", "user"), content=msg.get("content", ""))
+                    for msg in context.messages
+                ],
+                stream=False,
+                temperature=context.temperature,
+                max_tokens=context.max_tokens
+            )
+            
+            # 调用LLM
+            response = await llm_service.chat(chat_request)
+            
+            # 提取响应内容
+            if response.choices:
+                context.response_content = response.choices[0].message.content
+            
+            # 记录token使用
+            if response.usage:
+                context.metadata["prompt_tokens"] = response.usage.prompt_tokens
+                context.metadata["completion_tokens"] = response.usage.completion_tokens
+                context.metadata["total_tokens"] = response.usage.total_tokens
+            
+            context.metadata["model_used"] = model_config.get("model")
+            context.metadata["llm_called"] = True
+            
+            await llm_service.close()
+            
+        except ValueError as e:
+            logger.error(f"[{context.request_id}] LLM配置错误: {e}")
+            context.error_occurred = True
+            context.response_content = "抱歉，AI服务配置错误，请联系管理员。"
+            context.metadata["llm_config_error"] = str(e)
+        except Exception as e:
+            logger.error(f"[{context.request_id}] LLM调用失败: {e}")
+            context.error_occurred = True
+            context.response_content = "抱歉，AI服务暂时不可用，请稍后重试。"
+            context.metadata["llm_error"] = str(e)
+        
+        return context
+```
+
+**注意事项**:
+- 关键词替换在 Phase 3（模型层）最先执行
+- 匹配成功后直接返回，不调用后续的 ModelRouter.route()
+- 替换后的消息用于发送给LLM，但原始消息保存在 metadata 中
+- RawDataArchiveHandler 会将原始消息一起归档
+
+**RawDataArchiveHandler**（永久归档，自动清理）:
+
+```python
+class RawDataArchiveHandler(PipelineHandler):
+    """完整数据归档 - 用于调试和审计，根据配置自动清理"""
+    
+    def __init__(self, conversation_manager):
+        super().__init__("RawDataArchiveHandler")
+        self._cm = conversation_manager
+        self._db = conversation_manager._db
+    
+    async def _process(self, context: ChatContext) -> ChatContext:
+        archive_data = {
+            "conversation_id": context.conversation_id,
+            "request_id": context.request_id,
+            "timestamp": datetime.utcnow(),
+            "request": {
+                "user_message": context.user_message,
+                "virtual_model": context.virtual_model,
+                "messages": context.messages,
+                "temperature": context.temperature,
+                "max_tokens": context.max_tokens,
+                "knowledge_enabled": context.metadata.get("knowledge_enabled", False),
+                "web_search_enabled": context.metadata.get("web_search_enabled", False)
+            },
+            "response": {
+                "content": context.response_content,
+                "model_type": context.model_type,
+                "model_used": context.metadata.get("model_used"),
+                "tokens_used": context.metadata.get("tokens_used")
+            },
+            "processing_metadata": context.metadata,
+            "duration_ms": (time.time() - context.start_time) * 1000
+        }
+        
+        # 保存到raw_conversation_logs集合
+        await self._db["raw_conversation_logs"].insert_one(archive_data)
+        
+        logger.info(f"📦 [{context.request_id}] 原始数据已归档")
+        return context
+```
+
+#### 3.5.4 数据清理策略
+
+根据 `config.yml` 中的 `ai-gateway.log.system.retention.days` 配置自动清理：
+
+```python
+# core/tasks/cleanup_task.py
+
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class RawDataCleanupTask:
+    """定时清理Raw数据任务"""
+    
+    def __init__(self, db, config_manager):
+        self._db = db
+        self._config = config_manager
+    
+    async def cleanup(self):
+        """执行清理"""
+        retention_days = self._config.get(
+            "ai-gateway.log.system.retention.days",
+            default=30
+        )
+        
+        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        
+        # 删除过期数据
+        result = await self._db["raw_conversation_logs"].delete_many({
+            "timestamp": {"$lt": cutoff_date}
+        })
+        
+        logger.info(f"🧹 Raw数据清理完成: 删除 {result.deleted_count} 条记录（保留{retention_days}天）")
+        return result.deleted_count
+```
+
+#### 3.5.5 错误恢复机制
+
+```python
+class ErrorRecoveryHandler:
+    """错误恢复包装器 - 确保消息不丢失"""
+    
+    def __init__(self, conversation_manager):
+        self._cm = conversation_manager
+    
+    async def handle_with_recovery(self, context: ChatContext, chain: PipelineHandler):
+        """带错误恢复的处理"""
+        try:
+            return await chain.handle(context)
+        except Exception as e:
+            logger.error(f"❌ [{context.request_id}] 职责链执行失败: {e}")
+            
+            # 确保用户消息已保存（如果没保存的话）
+            if not context.user_message_saved:
+                try:
+                    if not context.conversation_id:
+                        context.conversation_id = await self._cm.create_conversation(
+                            context.virtual_model
+                        )
+                    
+                    await self._cm.add_message(
+                        context.conversation_id,
+                        "user",
+                        context.user_message,
+                        metadata={
+                            "error_occurred": True,
+                            "error_message": str(e),
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                    )
+                    logger.info(f"💾 [{context.request_id}] 紧急保存用户消息成功")
+                except Exception as save_error:
+                    logger.error(f"❌ [{context.request_id}] 紧急保存失败: {save_error}")
+            
+            # 返回友好的错误响应
+            context.response_content = "抱歉，处理您的请求时出现了错误。请稍后重试。"
+            context.error_occurred = True
+            context.metadata["error"] = str(e)
+            
+            return context
+```
+
+#### 3.5.6 使用示例
+
+**简化后的 chat.py 实现**（LLM调用已整合到职责链）：
+
+```python
+# api/proxy/v1/chat.py
+
+@router.post("/chat/completions")
+async def chat_completions(
+    request: Request,
+    model_info: dict = Depends(verify_proxy_key),
+    conversation_manager: ConversationManager = Depends(get_conversation_manager),
+    skill_manager: SkillManager = Depends(get_skill_manager),
+    config_manager: ConfigManager = Depends(get_config_manager),
+    model_router: ModelRouter = Depends(get_model_router)
+):
+    """
+    对话接口 - 使用职责链模式
+    
+    流程简化说明：
+    1. LLM调用已整合到职责链中的 LLMInvocationHandler
+    2. 消息保存由 UserMessagePersistence 和 AssistantMessagePersistence 自动完成
+    3. 前端无需手动调用保存API
+    """
+    
+    # 1. 解析请求
+    body = await request.json()
+    
+    # 2. 构建上下文
+    context = ChatContext(
+        conversation_id=body.get("conversation_id"),
+        virtual_model=model_info["name"],
+        messages=body.get("messages", []),
+        user_message=body.get("messages", [])[-1].get("content", "") if body.get("messages") else "",
+        stream=False,
+        temperature=body.get("temperature", 0.7),
+        max_tokens=body.get("max_tokens", 2000),
+        metadata={"client_ip": request.client.host}
+    )
+    
+    # 3. 创建职责链
+    pipeline = ChatPipeline(
+        conversation_manager=conversation_manager,
+        skill_manager=skill_manager,
+        config_manager=config_manager,
+        model_router=model_router
+    )
+    
+    # 4. 执行处理（职责链内部完成：验证→保存用户消息→路由→调用LLM→保存助手回复→归档）
+    result = await pipeline.process(context)
+    
+    # 5. 返回响应
+    if result.error_occurred:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": result.response_content,
+                    "type": "processing_error",
+                    "request_id": result.request_id
+                }
+            }
+        )
+    
+    # 响应包含 conversation_id，前端可用它更新对话列表
+    return result.final_response
+```
+
+**关键改进**：
+- ✅ LLMInvocationHandler 实际调用LLM服务，不再需要在职责链外手动调用
+- ✅ 自动保存用户消息和助手回复，前端无需额外调用保存API
+- ✅ 所有客户端（WebChat/ChatBox/第三方）统一通过职责链处理
+
+---
+
+### 3.4 对话管理器 (ConversationManager)
+
+**职责**: 对话的创建、查询、保存、删除
+
+**类设计**:
 ```python
 class ConversationManager:
     _mongodb: AsyncIOMotorClient
@@ -940,6 +1857,49 @@ class ConversationManager:
         if doc:
             return Conversation(**doc)
         return None
+    
+    async def get_or_create_by_fingerprint(
+        self, 
+        fingerprint: str, 
+        virtual_model: str,
+        ttl_minutes: int = 30
+    ) -> str:
+        """
+        通过指纹获取或创建对话（用于ChatBox等不发送conversation_id的客户端）
+        
+        Args:
+            fingerprint: 消息指纹（基于前2条用户消息的MD5）
+            virtual_model: 虚拟模型名称
+            ttl_minutes: 指纹过期时间（分钟）
+            
+        Returns:
+            str: 对话ID（现有或新创建）
+        """
+        try:
+            # 1. 尝试从Redis获取现有对话
+            if self._redis:
+                cache_key = f"conversation:fingerprint:{fingerprint}"
+                existing_id = await self._redis.get(cache_key)
+                
+                if existing_id:
+                    # 验证对话是否仍然存在
+                    existing_conv = await self.get_conversation(existing_id)
+                    if existing_conv and existing_conv.virtual_model == virtual_model:
+                        return existing_id
+            
+            # 2. 创建新对话
+            conversation_id = await self.create_conversation(virtual_model)
+            
+            # 3. 保存指纹到Redis
+            if self._redis:
+                cache_key = f"conversation:fingerprint:{fingerprint}"
+                await self._redis.setex(cache_key, ttl_minutes * 60, conversation_id)
+            
+            return conversation_id
+            
+        except Exception as e:
+            # 失败时创建新对话
+            return await self.create_conversation(virtual_model)
     
     async def list_conversations(self, 
                                  virtual_model: Optional[str] = None,
@@ -2343,7 +3303,264 @@ pylint backend/
 
 ---
 
-## 11. 开发顺序
+## 11. 可扩展路由架构设计
+
+### 11.1 设计理念
+
+当前版本支持 **small/big** 两个模型，但架构必须支持未来扩展到 **N 个模型**（model_1, model_2, ... model_n）。
+
+**设计原则**:
+1. **向后兼容**: 现有 small/big 配置继续工作
+2. **渐进扩展**: 未来可添加任意数量的模型
+3. **配置驱动**: 通过 YAML 配置动态定义模型
+4. **统一抽象**: 所有模型使用相同的配置结构
+
+### 11.2 配置结构（可扩展版）
+
+```yaml
+ai-gateway:
+  virtual_models:
+    demo1:
+      proxy_key: "xxx"
+      base_url: "http://..."
+      
+      # ========== 路由配置（核心）==========
+      routing:
+        current: "small"              # 当前默认模型ID
+        force_current: false          # 是否强制使用current
+        
+        # 关键词切换配置
+        keyword_switching:
+          enabled: true
+          rules:                      # 关键词规则列表（可扩展）
+            - pattern: "@大哥"
+              target: "big"          # 目标模型ID
+            - pattern: "@小弟" 
+              target: "small"
+            - pattern: "@code"
+              target: "coding"       # 未来可扩展到其他模型
+        
+        # 模型列表（可扩展，当前2个，未来N个）
+        models:
+          small:                      # 模型ID
+            name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
+            api_key: "sk-xxx"
+            base_url: "https://api.siliconflow.cn/v1"
+            provider: "siliconflow"
+            priority: 1               # 优先级（用于排序显示）
+          big:
+            name: "Pro/deepseek-ai/DeepSeek-V3.2"
+            api_key: "sk-xxx"
+            base_url: "https://api.siliconflow.cn/v1"
+            provider: "siliconflow"
+            priority: 2
+          # coding:                  # 未来可添加第3、4、N个模型
+          #   name: "codellama/CodeLlama-70b-Instruct-hf"
+          #   api_key: "sk-xxx"
+          #   base_url: "https://api.siliconflow.cn/v1"
+          #   provider: "siliconflow"
+          #   priority: 3
+      
+      # 其他配置保持不变
+      knowledge:
+        enabled: true
+      web_search:
+        enabled: true
+```
+
+### 11.3 关键设计点
+
+#### 1. 使用 `models` 对象替代固定的 `small/big`
+
+**当前版本（2个模型）**:
+```yaml
+small: { ... }
+big: { ... }
+```
+
+**未来版本（N个模型）**:
+```yaml
+models:
+  small: { ... }
+  big: { ... }
+  coding: { ... }
+  vision: { ... }
+  # ... 任意数量
+```
+
+#### 2. 路由目标使用模型ID（字符串）而非枚举
+
+```python
+# 当前
+model_type: Literal["small", "big"]
+
+# 未来（可扩展）
+target_model: str  # 可以是 "small", "big", "coding", "vision" 等任意ID
+```
+
+### 11.4 Pydantic 模型设计
+
+```python
+# 可扩展模型配置
+class ModelConfig(BaseModel):
+    """单个模型配置（可扩展）"""
+    name: str                    # 模型名称（如 deepseek-ai/DeepSeek-V3）
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    provider: str = "siliconflow"  # 提供商
+    priority: int = 1            # 显示优先级
+
+class KeywordRule(BaseModel):
+    """关键词规则"""
+    pattern: str                 # 匹配模式
+    target: str                  # 目标模型ID（任意字符串，不限于small/big）
+
+class KeywordSwitchingConfig(BaseModel):
+    """关键词切换配置"""
+    enabled: bool = False
+    rules: List[KeywordRule] = Field(default_factory=list)
+
+class RoutingConfig(BaseModel):
+    """路由配置（核心可扩展部分）"""
+    current: str = "small"       # 当前默认模型ID（任意字符串）
+    force_current: bool = False  # 是否强制
+    models: Dict[str, ModelConfig] = Field(default_factory=dict)  # 动态模型列表
+    keyword_switching: KeywordSwitchingConfig = Field(default_factory=KeywordSwitchingConfig)
+
+class VirtualModel(BaseModel):
+    """虚拟模型（包含可扩展的路由配置）"""
+    name: str
+    proxy_key: str
+    base_url: Optional[str] = None
+    use: bool = True
+    
+    # 新的可扩展路由配置
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
+    
+    # 向后兼容：保留旧的 small/big 配置
+    # 迁移时自动转换到 routing.models
+    
+    # 其他配置
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+```
+
+### 11.5 路由引擎（支持动态模型）
+
+```python
+# model_router.py
+class ModelRouter:
+    async def route(
+        self, 
+        virtual_model: str, 
+        user_input: str,
+        conversation_id: Optional[str] = None
+    ) -> RouteResult:
+        """
+        模型路由决策（支持动态模型）
+        """
+        vm_config = self._config_manager.get(f"ai-gateway.virtual_models.{virtual_model}")
+        if not vm_config:
+            return RouteResult(model_type="small", reason="配置不存在")
+        
+        routing = vm_config.get("routing", {})
+        
+        # 1. 检查强制模式
+        if routing.get("force_current", False):
+            current = routing.get("current", "small")
+            return RouteResult(
+                model_type=current,
+                reason="强制模式",
+                confidence=1.0
+            )
+        
+        # 2. 检查关键词切换
+        keyword_config = routing.get("keyword_switching", {})
+        if keyword_config.get("enabled", False):
+            user_input_lower = user_input.lower()
+            
+            for rule in keyword_config.get("rules", []):
+                pattern = rule.get("pattern", "")
+                target = rule.get("target", "")
+                
+                if pattern.lower() in user_input_lower:
+                    # 验证目标模型是否存在
+                    available_models = routing.get("models", {})
+                    if target in available_models:
+                        return RouteResult(
+                            model_type=target,  # 返回动态模型ID
+                            matched_rule=f"keyword:{pattern}",
+                            reason=f"关键词匹配: {pattern}",
+                            confidence=1.0
+                        )
+        
+        # 3. 使用默认模型
+        current = routing.get("current", "small")
+        return RouteResult(
+            model_type=current,
+            reason="使用默认模型"
+        )
+```
+
+### 11.6 迁移策略（向后兼容）
+
+#### 方案 A：自动迁移（推荐）
+
+在读取配置时自动将旧格式转换为新格式：
+
+```python
+def migrate_virtual_model_config(config: dict) -> dict:
+    """自动迁移旧配置到新格式"""
+    if "routing" in config:
+        return config  # 已经是新格式
+    
+    # 旧格式转换
+    routing = {
+        "current": config.get("current", "small"),
+        "force_current": config.get("force-current", False),
+        "models": {
+            "small": config.get("small", {}),
+            "big": config.get("big", {})
+        },
+        "keyword_switching": config.get("keyword_switching", {
+            "enabled": False,
+            "rules": []
+        })
+    }
+    
+    config["routing"] = routing
+    return config
+```
+
+#### 方案 B：双轨支持
+
+同时支持新旧两种配置格式：
+
+```python
+# 读取时优先使用新格式， fallback 到旧格式
+models = routing.get("models", {
+    "small": config.get("small"),
+    "big": config.get("big")
+})
+```
+
+### 11.7 实施阶段
+
+**阶段 1**（当前版本）：
+1. 实现新的 `routing` 配置结构
+2. 保持只支持 small/big 两个模型
+3. 确保代码架构支持未来扩展
+4. 添加自动迁移逻辑
+
+**阶段 2**（未来版本）：
+1. 添加 "+ 添加模型" 功能
+2. 支持任意数量的模型
+3. 添加模型优先级排序
+4. 更新前端UI支持动态模型
+
+---
+
+## 12. 开发顺序
 
 按照以下顺序实现后端模块:
 
@@ -2445,6 +3662,15 @@ httpx==0.26.0
 
 ---
 
-**文档版本**: 1.0  
-**状态**: 待审核  
+**文档版本**: 1.1  
+**状态**: 已更新  
 **审核人**: 用户确认后实施开发
+
+---
+
+## 文档更新记录
+
+| 版本 | 日期 | 更新内容 | 作者 |
+|------|------|----------|------|
+| 1.1 | 2026-02-14 | 新增第11章：可扩展路由架构设计 | AI Assistant |
+| 1.0 | 2026-02-09 | 初始版本 | 开发团队 |

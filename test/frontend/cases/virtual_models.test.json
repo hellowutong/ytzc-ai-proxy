@@ -66,6 +66,121 @@
       "assertions": [
         "expect(api.post).toHaveBeenCalled()"
       ]
+    },
+    {
+      "id": "F-TC007",
+      "name": "test_stream_support_switch_render",
+      "description": "测试流式支持开关正确渲染",
+      "category": "component",
+      "priority": "P0",
+      "tags": ["stream_support", "rendering", "positive"],
+      "component": "ModelDialog",
+      "preconditions": ["对话框已打开", "stream_support默认值为true"],
+      "inputs": {
+        "model": {
+          "name": "demo1",
+          "stream_support": true
+        }
+      },
+      "expected": {
+        "switch_exists": true,
+        "switch_checked": true,
+        "label_text": "流式支持"
+      },
+      "assertions": [
+        "expect(wrapper.find('[data-testid=\"stream-support-switch\"]').exists()).toBe(true)",
+        "expect(wrapper.find('[data-testid=\"stream-support-switch\"]').classes()).toContain('is-checked')",
+        "expect(wrapper.text()).toContain('流式支持')"
+      ]
+    },
+    {
+      "id": "F-TC008",
+      "name": "test_stream_support_switch_toggle",
+      "description": "测试流式支持开关切换交互",
+      "category": "component",
+      "priority": "P0",
+      "tags": ["stream_support", "interaction", "state"],
+      "component": "ModelDialog",
+      "preconditions": ["对话框已打开", "stream_support初始为true"],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": "[data-testid='stream-support-switch']"}
+      ],
+      "expected": {
+        "stream_support_value": false,
+        "switch_unchecked": true
+      },
+      "assertions": [
+        "expect(wrapper.vm.form.stream_support).toBe(false)",
+        "expect(wrapper.find('[data-testid=\"stream-support-switch\"]').classes()).not.toContain('is-checked')"
+      ]
+    },
+    {
+      "id": "F-TC009",
+      "name": "test_stream_support_save_to_api",
+      "description": "测试流式支持字段正确保存到API",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["stream_support", "api", "positive"],
+      "component": "ModelDialog",
+      "preconditions": ["对话框已打开", "已填写模型名称"],
+      "inputs": {
+        "model": {
+          "name": "test-stream-model",
+          "proxy_key": "sk-test",
+          "stream_support": false
+        }
+      },
+      "actions": [
+        {"type": "click", "target": "[data-testid='stream-support-switch']"},
+        {"type": "click", "target": "button[type='submit']"}
+      ],
+      "expected": {
+        "api_called": true,
+        "api_payload_has_stream_support": true,
+        "stream_support_value": false
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalledWith('/admin/ai/v1/virtual-models', expect.objectContaining({ stream_support: false }))"
+      ]
+    },
+    {
+      "id": "F-TC010",
+      "name": "test_stream_support_default_value",
+      "description": "测试流式支持字段默认值为true",
+      "category": "component",
+      "priority": "P1",
+      "tags": ["stream_support", "default", "boundary"],
+      "component": "ModelDialog",
+      "preconditions": ["打开添加模型对话框（新建模式）"],
+      "inputs": {},
+      "expected": {
+        "default_stream_support": true
+      },
+      "assertions": [
+        "expect(wrapper.vm.form.stream_support).toBe(true)",
+        "expect(wrapper.find('[data-testid=\"stream-support-switch\"]').classes()).toContain('is-checked')"
+      ]
+    },
+    {
+      "id": "F-TC011",
+      "name": "test_stream_support_position_after_force_current",
+      "description": "测试流式支持开关位于强制使用开关之后",
+      "category": "component",
+      "priority": "P1",
+      "tags": ["stream_support", "layout", "positive"],
+      "component": "ModelDialog",
+      "preconditions": ["对话框已打开"],
+      "inputs": {},
+      "expected": {
+        "correct_order": true
+      },
+      "assertions": [
+        "const labels = wrapper.findAll('.el-form-item__label').map(el => el.text())",
+        "const forceIndex = labels.indexOf('强制使用')",
+        "const streamIndex = labels.indexOf('流式支持')",
+        "expect(streamIndex).toBeGreaterThan(forceIndex)"
+      ]
     }
   ]
 }

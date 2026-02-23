@@ -5,6 +5,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from api.dependencies import get_conversation_manager
 from core.conversation_manager import ConversationManager
@@ -34,7 +35,15 @@ async def get_conversations(
                 {
                     "id": conv.id,
                     "model": conv.virtual_model,
-                    "messages": [],  # 列表不返回详细消息
+                    "messages": [
+                        {
+                            "role": msg.role,
+                            "content": msg.content,
+                            "timestamp": msg.timestamp.isoformat() if isinstance(msg.timestamp, datetime) else str(msg.timestamp)
+                        }
+                        for msg in conv.messages
+                    ],
+                    "message_count": conv.message_count,
                     "created_at": conv.created_at.isoformat() if isinstance(conv.created_at, datetime) else str(conv.created_at),
                     "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at)
                 }
@@ -43,6 +52,44 @@ async def get_conversations(
             "total": total,
             "page": page,
             "page_size": page_size
+        }
+    }
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.delete("/conversations/batch")
+async def batch_delete_conversations(
+    request: BatchDeleteRequest,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
+):
+    """批量删除对话"""
+    ids = request.ids
+    if not ids:
+        raise HTTPException(status_code=400, detail="未提供对话ID列表")
+    
+    success_count = 0
+    failed_ids = []
+    
+    for conversation_id in ids:
+        try:
+            success = await conversation_manager.delete_conversation(conversation_id)
+            if success:
+                success_count += 1
+            else:
+                failed_ids.append(conversation_id)
+        except Exception:
+            failed_ids.append(conversation_id)
+    
+    return {
+        "code": 200,
+        "message": f"已删除 {success_count} 个对话",
+        "data": {
+            "success_count": success_count,
+            "failed_count": len(failed_ids),
+            "failed_ids": failed_ids
         }
     }
 
@@ -104,6 +151,31 @@ async def delete_conversation(
         return {
             "code": 200,
             "message": "对话删除成功",
+            "data": None
+        }
+    raise HTTPException(status_code=404, detail="对话不存在")
+
+
+@router.put("/conversations/{conversation_id}")
+async def update_conversation(
+    conversation_id: str,
+    body: dict,
+    conversation_manager: ConversationManager = Depends(get_conversation_manager)
+):
+    """更新对话消息"""
+    messages = body.get("messages", [])
+    updated_at = body.get("updated_at")
+    
+    success = await conversation_manager.update_messages(
+        conversation_id,
+        messages,
+        updated_at
+    )
+    
+    if success:
+        return {
+            "code": 200,
+            "message": "对话更新成功",
             "data": None
         }
     raise HTTPException(status_code=404, detail="对话不存在")

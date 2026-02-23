@@ -172,7 +172,7 @@ async def verify_proxy_key(authorization: Optional[str] = Header(None)):
     
     # 查找匹配的虚拟模型
     config_manager = get_config_manager()
-    virtual_models = config_manager.get("ai-proxy.virtual_models", {})
+    virtual_models = config_manager.get("ai-gateway.virtual_models", {})
     
     for model_name, model_config in virtual_models.items():
         if model_config.get("proxy_key") == proxy_key:

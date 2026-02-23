@@ -6,6 +6,8 @@ import logging
 from typing import Optional, List, Tuple, Dict, Any
 from datetime import datetime
 from dataclasses import dataclass, field
+from bson import ObjectId
+from bson.errors import InvalidId
 import uuid
 
 
@@ -58,6 +60,33 @@ class ConversationManager:
         self._db = self._mongodb[db_name]
         self._collection = self._db["conversations"]
     
+    def _normalize_id(self, id_value: Any) -> Any:
+        """
+        标准化ID为MongoDB可以查询的格式
+        
+        支持字符串UUID和ObjectId类型
+        """
+        if isinstance(id_value, str):
+            # 尝试转换为ObjectId，如果是有效的24位十六进制字符串
+            if len(id_value) == 24 and all(c in '0123456789abcdef' for c in id_value.lower()):
+                try:
+                    return ObjectId(id_value)
+                except InvalidId:
+                    pass
+            # 否则保持字符串（UUID格式）
+            return id_value
+        elif isinstance(id_value, ObjectId):
+            return id_value
+        return id_value
+    
+    def _convert_id_to_string(self, id_value: Any) -> str:
+        """
+        将ID转换为字符串格式（用于API返回）
+        """
+        if isinstance(id_value, ObjectId):
+            return str(id_value)
+        return str(id_value)
+    
     def _generate_uuid(self) -> str:
         """生成UUID"""
         return str(uuid.uuid4())
@@ -100,6 +129,54 @@ class ConversationManager:
             logger.error(f"创建会话失败: {e}")
             raise
     
+    
+
+    async def get_or_create_by_fingerprint(
+        self, 
+        fingerprint: str, 
+        virtual_model: str,
+        ttl_minutes: int = 30
+    ) -> str:
+        """
+        通过指纹获取或创建对话
+        
+        Args:
+            fingerprint: 消息指纹
+            virtual_model: 虚拟模型名称
+            ttl_minutes: 指纹过期时间（分钟）
+            
+        Returns:
+            str: 对话ID（现有或新创建）
+        """
+        try:
+            # 1. 尝试从Redis获取现有对话
+            if self._redis:
+                cache_key = f"conversation:fingerprint:{fingerprint}"
+                existing_id = await self._redis.get(cache_key)
+                
+                if existing_id:
+                    # 验证对话是否仍然存在
+                    existing_conv = await self.get_conversation(existing_id)
+                    if existing_conv and existing_conv.virtual_model == virtual_model:
+                        logger.info(f"通过指纹找到现有对话: {existing_id}")
+                        return existing_id
+            
+            # 2. 创建新对话
+            conversation_id = await self.create_conversation(virtual_model)
+            
+            # 3. 保存指纹到Redis
+            if self._redis:
+                cache_key = f"conversation:fingerprint:{fingerprint}"
+                await self._redis.setex(cache_key, ttl_minutes * 60, conversation_id)
+                logger.info(f"保存对话指纹: {fingerprint} -> {conversation_id}")
+            
+            return conversation_id
+            
+        except Exception as e:
+            logger.error(f"指纹查询失败: {e}")
+            # 失败时创建新对话
+            return await self.create_conversation(virtual_model)
+
     async def add_message(
         self, 
         conversation_id: str, 
@@ -128,9 +205,12 @@ class ConversationManager:
                 "metadata": metadata or {}
             }
             
+            # 标准化ID格式（支持字符串UUID和ObjectId）
+            normalized_id = self._normalize_id(conversation_id)
+            
             # 更新MongoDB
             result = await self._collection.update_one(
-                {"_id": conversation_id},
+                {"_id": normalized_id},
                 {
                     "$push": {"messages": message},
                     "$set": {"updated_at": now},
@@ -149,7 +229,7 @@ class ConversationManager:
             # 检查是否有知识引用
             if metadata and metadata.get("knowledge_references"):
                 await self._collection.update_one(
-                    {"_id": conversation_id},
+                    {"_id": normalized_id},
                     {"$set": {"has_knowledge_reference": True}}
                 )
             
@@ -160,11 +240,88 @@ class ConversationManager:
             logger.error(f"添加消息失败: {e}")
             return False
     
+    async def update_messages(
+        self,
+        conversation_id: str,
+        messages: List[Dict[str, Any]],
+        updated_at: Optional[str] = None
+    ) -> bool:
+        """
+        更新会话的所有消息（覆盖更新）
+        
+        Args:
+            conversation_id: 会话ID
+            messages: 消息列表
+            updated_at: 更新时间（ISO格式字符串，可选）
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            now = datetime.utcnow()
+            update_time = updated_at if updated_at else now.isoformat()
+            
+            # 标准化ID格式（支持字符串UUID和ObjectId）
+            normalized_id = self._normalize_id(conversation_id)
+            
+            # 转换消息格式
+            formatted_messages = []
+            for msg in messages:
+                msg_timestamp = msg.get("timestamp") or now
+                if isinstance(msg_timestamp, str):
+                    msg_timestamp = datetime.fromisoformat(msg_timestamp.replace("Z", "+00:00"))
+                
+                formatted_messages.append({
+                    "role": msg.get("role", ""),
+                    "content": msg.get("content", ""),
+                    "timestamp": msg_timestamp,
+                    "metadata": msg.get("metadata", {})
+                })
+            
+            # 更新MongoDB
+            result = await self._collection.update_one(
+                {"_id": normalized_id},
+                {
+                    "$set": {
+                        "messages": formatted_messages,
+                        "updated_at": now,
+                        "message_count": len(formatted_messages)
+                    }
+                }
+            )
+            
+            if result.modified_count == 0 and result.matched_count == 0:
+                logger.warning(f"更新消息失败，会话不存在: {conversation_id}")
+                return False
+            
+            # 清除Redis缓存
+            if self._redis:
+                cache_key = f"conversation:{conversation_id}:messages"
+                await self._redis.delete(cache_key)
+            
+            logger.debug(f"更新消息成功: {conversation_id}, count={len(formatted_messages)}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"更新消息失败: {e}")
+            return False
+    
     async def _update_redis_cache(self, conversation_id: str, message: Dict):
         """更新Redis缓存"""
         try:
             import json
+            from datetime import datetime
             cache_key = f"conversation:{conversation_id}:messages"
+            
+            # 转换datetime为字符串（避免JSON序列化失败）
+            serializable_message = dict(message)
+            if isinstance(serializable_message.get("timestamp"), datetime):
+                serializable_message["timestamp"] = serializable_message["timestamp"].isoformat()
+            # 同时处理metadata中的datetime
+            if isinstance(serializable_message.get("metadata"), dict):
+                for key, value in list(serializable_message["metadata"].items()):
+                    if isinstance(value, datetime):
+                        serializable_message["metadata"][key] = value.isoformat()
             
             # 获取现有缓存
             existing = await self._redis.get(cache_key)
@@ -174,7 +331,7 @@ class ConversationManager:
                 messages = []
             
             # 添加新消息
-            messages.append(message)
+            messages.append(serializable_message)
             
             # 只保留最近20条消息
             if len(messages) > 20:
@@ -197,7 +354,9 @@ class ConversationManager:
             Optional[Conversation]: 会话对象，不存在时返回None
         """
         try:
-            doc = await self._collection.find_one({"_id": conversation_id})
+            # 标准化ID格式（支持字符串UUID和ObjectId）
+            normalized_id = self._normalize_id(conversation_id)
+            doc = await self._collection.find_one({"_id": normalized_id})
             
             if not doc:
                 return None
@@ -213,7 +372,7 @@ class ConversationManager:
                 ))
             
             return Conversation(
-                id=doc["_id"],
+                id=self._convert_id_to_string(doc["_id"]),
                 virtual_model=doc.get("virtual_model", ""),
                 messages=messages,
                 created_at=doc.get("created_at", datetime.utcnow()),
@@ -280,10 +439,20 @@ class ConversationManager:
             
             conversations = []
             async for doc in cursor:
+                # 转换消息格式（返回最近5条用于预览）
+                messages = []
+                for msg_data in doc.get("messages", [])[-5:]:  # 最近5条
+                    messages.append(Message(
+                        role=msg_data.get("role", ""),
+                        content=msg_data.get("content", ""),
+                        timestamp=msg_data.get("timestamp", datetime.utcnow()),
+                        metadata=msg_data.get("metadata", {})
+                    ))
+                
                 conversations.append(Conversation(
-                    id=doc["_id"],
+                    id=self._convert_id_to_string(doc["_id"]),
                     virtual_model=doc.get("virtual_model", ""),
-                    messages=[],  # 列表查询不返回消息详情
+                    messages=messages,  # 返回最近5条消息用于预览
                     created_at=doc.get("created_at", datetime.utcnow()),
                     updated_at=doc.get("updated_at", datetime.utcnow()),
                     message_count=doc.get("message_count", 0),
@@ -310,7 +479,13 @@ class ConversationManager:
             bool: 是否成功
         """
         try:
-            result = await self._collection.delete_one({"_id": conversation_id})
+            # 标准化ID格式（支持字符串UUID和ObjectId）
+            normalized_id = self._normalize_id(conversation_id)
+            result = await self._collection.delete_one({"_id": normalized_id})
+            
+            # 如果没找到，尝试用字符串再删除一次（兼容某些特殊情况）
+            if result.deleted_count == 0 and isinstance(normalized_id, ObjectId):
+                result = await self._collection.delete_one({"_id": conversation_id})
             
             if result.deleted_count > 0:
                 # 同时删除Redis缓存

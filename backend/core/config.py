@@ -150,6 +150,22 @@ class ConfigManager:
         except Exception as e:
             print(f"保存配置失败: {e}")
             return False
+    
+    def validate_config(self, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """
+        验证配置（占位实现）
+        
+        此方法为技能配置验证的占位实现，待技能系统完善后再实现具体逻辑。
+        当前直接返回验证通过。
+        
+        Args:
+            config: 配置字典
+            
+        Returns:
+            Tuple[bool, List[str]]: (是否通过, 错误信息列表)
+        """
+        # 占位实现：待技能系统完善后实现具体验证逻辑
+        return True, []
 
 
 # 全局配置管理器实例

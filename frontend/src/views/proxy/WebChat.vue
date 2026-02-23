@@ -230,9 +230,36 @@ const createNewChat = async () => {
   scrollToBottom()
 }
 
-const selectConversation = (conv: Conversation) => {
-  chatStore.setCurrentConversation(conv)
-  selectedModel.value = conv.model
+const selectConversation = async (conv: Conversation) => {
+  // 重新获取对话详情（包含消息）
+  try {
+    const response = await fetch(`/admin/ai/v1/conversations/${conv.id}`)
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      // 更新对话信息（包含完整消息列表）
+      const fullConv = result.data
+      chatStore.setCurrentConversation(fullConv)
+      selectedModel.value = fullConv.model
+      
+      // 更新对话列表中的该对话（用于预览更新）
+      const index = chatStore.conversations.findIndex(c => c.id === conv.id)
+      if (index !== -1) {
+        chatStore.conversations[index] = { ...chatStore.conversations[index], ...fullConv }
+      }
+    } else {
+      // 如果获取详情失败，使用列表中的基本信息
+      chatStore.setCurrentConversation(conv)
+      selectedModel.value = conv.model
+      ElMessage.warning('获取对话详情失败')
+    }
+  } catch (error) {
+    console.error('Failed to fetch conversation details:', error)
+    // 如果请求失败，使用列表中的基本信息
+    chatStore.setCurrentConversation(conv)
+    selectedModel.value = conv.model
+    ElMessage.error('获取对话详情失败')
+  }
 }
 
 const deleteConversation = async (conv: Conversation) => {
@@ -265,8 +292,15 @@ const sendMessage = async () => {
   const message = inputMessage.value
   inputMessage.value = ''
   
+  // 如果没有当前对话，创建新对话
   if (!chatStore.currentConversation) {
-    await chatStore.createConversation(selectedModel.value)
+    const newConv = await chatStore.createConversation(selectedModel.value)
+    // 检查创建是否成功
+    if (!newConv || !chatStore.currentConversation) {
+      console.error('创建对话失败')
+      ElMessage.error('创建对话失败，请重试')
+      return
+    }
   }
   
   await chatStore.sendMessage(message, selectedModel.value)
@@ -318,9 +352,23 @@ const scrollToBottom = () => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   modelStore.fetchModels()
-  chatStore.fetchConversations()
+  await chatStore.fetchConversations()
+  
+  // 如果有当前对话，从后端获取完整消息
+  if (chatStore.currentConversation?.id) {
+    try {
+      const response = await fetch(`/admin/ai/v1/conversations/${chatStore.currentConversation.id}`)
+      const result = await response.json()
+      
+      if (result.code === 200 && result.data) {
+        chatStore.setCurrentConversation(result.data)
+      }
+    } catch (error) {
+      console.error('加载完整对话失败:', error)
+    }
+  }
 })
 </script>
 

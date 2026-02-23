@@ -60,7 +60,7 @@ class SkillListItem:
 class SkillManager:
     """Skill管理器"""
     
-    def __init__(self, config_manager=None, skill_base_path: str = "../skill"):
+    def __init__(self, config_manager=None, skill_base_path: str = "./skills"):
         """
         初始化Skill管理器
         

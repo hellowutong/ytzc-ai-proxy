@@ -20,12 +20,22 @@
         end-placeholder="结束日期"
         style="margin-left: 12px;"
       />
+      <el-button 
+        type="danger" 
+        :disabled="!hasSelection"
+        @click="batchDeleteConversations"
+        style="margin-left: 12px;"
+      >
+        <el-icon><Delete /></el-icon>
+        批量删除 ({{ selectedConversations.length }})
+      </el-button>
     </div>
 
     <!-- Conversations Table -->
     <el-card class="table-card">
-      <el-table :data="filteredConversations" style="width: 100%" v-loading="chatStore.loading">
-        <el-table-column prop="id" label="ID" width="300">
+      <el-table :data="filteredConversations" style="width: 100%" v-loading="chatStore.loading" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
+        <el-table-column prop="id" label="ID" width="400">
           <template #default="{ row }">
             <span class="id-cell">{{ row.id.slice(0, 8) }}...</span>
           </template>
@@ -39,15 +49,15 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="created_at" label="创建时间" width="180">
+        <el-table-column prop="created_at" label="创建时间" width="230">
           <template #default="{ row }">
-            {{ new Date(row.created_at).toLocaleString('zh-CN') }}
+            {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
 
-        <el-table-column prop="updated_at" label="最后更新" width="180">
+        <el-table-column prop="updated_at" label="最后更新" width="230">
           <template #default="{ row }">
-            {{ new Date(row.updated_at).toLocaleString('zh-CN') }}
+            {{ formatDateTime(row.updated_at) }}
           </template>
         </el-table-column>
 
@@ -95,16 +105,38 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Delete } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores'
 import type { Conversation } from '@/types'
 
 const chatStore = useChatStore()
 
+// 格式化时间为本地时间显示
+const formatDateTime = (timestamp: string) => {
+  if (!timestamp) return ''
+  try {
+    const date = new Date(timestamp)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  } catch (e) {
+    return timestamp
+  }
+}
+
 const searchQuery = ref('')
 const dateRange = ref([])
 const showDetailDialog = ref(false)
 const selectedConversation = ref<Conversation | null>(null)
+const selectedConversations = ref<Conversation[]>([])
+
+const hasSelection = computed(() => selectedConversations.value.length > 0)
 
 const filteredConversations = computed(() => {
   let result = chatStore.conversations
@@ -120,9 +152,25 @@ const filteredConversations = computed(() => {
   return result
 })
 
-const viewConversation = (conversation: Conversation) => {
-  selectedConversation.value = conversation
-  showDetailDialog.value = true
+const viewConversation = async (conversation: Conversation) => {
+  try {
+    // 从API获取完整对话详情（包括消息）
+    const response = await fetch(`/admin/ai/v1/conversations/${conversation.id}`)
+    const result = await response.json()
+    
+    if (result.code === 200 && result.data) {
+      selectedConversation.value = result.data
+    } else {
+      // 如果API失败，使用列表中的数据
+      selectedConversation.value = conversation
+    }
+    showDetailDialog.value = true
+  } catch (error) {
+    console.error('获取对话详情失败:', error)
+    // 降级使用列表数据
+    selectedConversation.value = conversation
+    showDetailDialog.value = true
+  }
 }
 
 const deleteConversation = async (conversation: Conversation) => {
@@ -132,9 +180,56 @@ const deleteConversation = async (conversation: Conversation) => {
       '确认删除',
       { type: 'warning' }
     )
-    // TODO: Implement delete API
-    ElMessage.success('删除成功')
+    
+    // 调用删除API
+    const response = await fetch(`/admin/ai/v1/conversations/${conversation.id}`, {
+      method: 'DELETE'
+    })
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      // 删除成功后重新加载列表
+      await chatStore.fetchConversations()
+      ElMessage.success('删除成功')
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
   } catch {
+    // Cancelled
+  }
+}
+
+const handleSelectionChange = (selection: Conversation[]) => {
+  selectedConversations.value = selection
+}
+
+const batchDeleteConversations = async () => {
+  const count = selectedConversations.value.length
+  if (count === 0) return
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${count} 个对话吗？此操作不可恢复。`,
+      '确认批量删除',
+      { type: 'warning' }
+    )
+    
+    const ids = selectedConversations.value.map(c => c.id)
+    const response = await fetch('/admin/ai/v1/conversations/batch', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    })
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      await chatStore.fetchConversations()
+      ElMessage.success(result.message)
+      selectedConversations.value = []
+    } else {
+      ElMessage.error(result.message || '删除失败')
+    }
+  } catch (error) {
     // Cancelled
   }
 }

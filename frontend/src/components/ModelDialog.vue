@@ -97,6 +97,10 @@
         <el-switch v-model="form.force_current" class="vscode-switch" />
       </el-form-item>
 
+      <el-form-item label="流式支持">
+        <el-switch v-model="form.stream_support" class="vscode-switch" />
+      </el-form-item>
+
       <!-- Small Model -->
       <el-divider content-position="left" class="vscode-divider">小模型配置</el-divider>
       
@@ -289,6 +293,7 @@ const defaultForm = {
   base_url: '',
   current: 'small' as 'small' | 'big',
   force_current: false,
+  stream_support: true,
   use: true,
   small: {
     model: '',

@@ -241,21 +241,50 @@ const handleSubmit = async (modelData: Partial<VirtualModel>, originalName?: str
 }
 
 // 测试单个模型连接
-const testModelConnection = async (modelConfig: { model: string; api_key: string; base_url: string }): Promise<{ success: boolean; message: string }> => {
+const testModelConnection = async (modelConfig: { model: string; api_key: string; base_url: string }, modelType: 'small' | 'big'): Promise<{ success: boolean; message: string }> => {
+  // 参数验证
+  if (!modelConfig.model || !modelConfig.model.trim()) {
+    return { success: false, message: '模型名称未配置' }
+  }
+  if (!modelConfig.base_url || !modelConfig.base_url.trim()) {
+    return { success: false, message: 'Base URL未配置' }
+  }
+  if (!modelConfig.api_key || !modelConfig.api_key.trim()) {
+    return { success: false, message: 'API Key未配置' }
+  }
+
   try {
     const response = await fetch('/admin/ai/v1/models/test-connection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(modelConfig)
     })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      return { 
+        success: false, 
+        message: `服务器错误 (${response.status}): ${errorText || '未知错误'}` 
+      }
+    }
+    
     const result = await response.json()
     if (result.code === 200) {
       return { success: true, message: '连接成功' }
+    } else if (result.code === 401) {
+      return { success: false, message: 'API Key无效或已过期' }
+    } else if (result.code === 400) {
+      return { success: false, message: `请求错误: ${result.message}` }
+    } else if (result.code === 408 || result.code === 503) {
+      return { success: false, message: `连接问题: ${result.message}` }
     } else {
-      return { success: false, message: result.message || '连接失败' }
+      return { success: false, message: result.message || `连接失败 (错误码: ${result.code})` }
     }
   } catch (error: any) {
     console.error('模型连接测试失败:', error)
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return { success: false, message: '网络请求失败，请检查网络连接' }
+    }
     return { success: false, message: `网络错误: ${error.message || '未知错误'}` }
   }
 }
@@ -268,9 +297,9 @@ const testModel = async (model: VirtualModel) => {
     ElMessage.info(`开始测试模型 "${model.name}"...`)
     
     // 先测试小模型
-    const smallResult = await testModelConnection(model.small)
+    const smallResult = await testModelConnection(model.small, 'small')
     // 再测试大模型（避免并发导致的连接问题）
-    const bigResult = await testModelConnection(model.big)
+    const bigResult = await testModelConnection(model.big, 'big')
     
     // 保存测试结果
     testResults.value[model.name] = {
