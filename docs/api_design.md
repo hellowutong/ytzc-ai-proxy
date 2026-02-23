@@ -1307,6 +1307,332 @@ Authorization: Bearer {proxy_key}
 }
 ```
 
+#### 2.4.16 获取Skill文件树
+
+**GET** `/admin/ai/v1/skills/{category}/{name}/tree`
+
+**查询参数**:
+- `is_custom`: 是否自定义 Skill (true/false)
+- `version`: Skill 版本 (如 v1, v2)
+
+**说明**: 获取 Skill 目录下的完整文件树结构，支持任意层级的子文件夹
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "name": "pdf-processing",
+    "type": "directory",
+    "path": "",
+    "children": [
+      {
+        "name": "SKILL.md",
+        "type": "file",
+        "path": "SKILL.md",
+        "extension": "md",
+        "size": 2456,
+        "isEditable": true
+      },
+      {
+        "name": "references",
+        "type": "directory",
+        "path": "references/",
+        "children": [
+          {
+            "name": "api.md",
+            "type": "file",
+            "path": "references/api.md",
+            "extension": "md",
+            "size": 1024,
+            "isEditable": true
+          },
+          {
+            "name": "examples.md",
+            "type": "file",
+            "path": "references/examples.md",
+            "extension": "md",
+            "size": 2048,
+            "isEditable": true
+          }
+        ]
+      },
+      {
+        "name": "scripts",
+        "type": "directory",
+        "path": "scripts/",
+        "children": [
+          {
+            "name": "analyze.py",
+            "type": "file",
+            "path": "scripts/analyze.py",
+            "extension": "py",
+            "size": 3072,
+            "isEditable": true
+          },
+          {
+            "name": "image.png",
+            "type": "file",
+            "path": "scripts/image.png",
+            "extension": "png",
+            "size": 10240,
+            "isEditable": false
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**文件类型说明**:
+- `isEditable: true`: 可编辑文件（.md, .py）
+- `isEditable: false`: 不可编辑文件（图片、二进制等）
+
+---
+
+#### 2.4.17 读取文件内容
+
+**GET** `/admin/ai/v1/skills/{category}/{name}/content`
+
+**查询参数**:
+- `is_custom`: 是否自定义 Skill (true/false)
+- `version`: Skill 版本
+- `path`: 文件相对路径（如 `references/api.md`、`scripts/analyze.py`）
+
+**说明**: 读取 Skill 目录下的任意文件内容
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "path": "references/api.md",
+    "content": "# API Reference\\n\\n## Overview\\n...",
+    "size": 1024,
+    "extension": "md",
+    "isEditable": true,
+    "lastModified": "2026-02-23T10:30:00Z"
+  }
+}
+```
+
+**错误响应** (文件不可编辑):
+```json
+{
+  "code": 400,
+  "message": "该文件类型不支持在线编辑",
+  "data": {
+    "path": "scripts/image.png",
+    "extension": "png"
+  }
+}
+```
+
+---
+
+#### 2.4.18 保存文件内容
+
+**PUT** `/admin/ai/v1/skills/{category}/{name}/content`
+
+**查询参数**:
+- `is_custom`: 是否自定义 Skill (true/false)
+- `version`: Skill 版本
+- `path`: 文件相对路径
+
+**请求体**:
+```json
+{
+  "content": "# Updated API Reference\\n\\n## Overview\\n..."
+}
+```
+
+**说明**: 
+- 保存文件内容到指定路径
+- 如果文件不存在，自动创建
+- 如果目录不存在，自动创建父目录
+- 仅支持 `.md` 和 `.py` 文件
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "文件保存成功",
+  "data": {
+    "path": "references/api.md",
+    "size": 1536,
+    "lastModified": "2026-02-23T14:30:00Z"
+  }
+}
+```
+
+**错误响应** (文件类型不支持):
+```json
+{
+  "code": 400,
+  "message": "仅支持保存 .md 和 .py 文件",
+  "data": null
+}
+```
+
+---
+
+#### 2.4.19 文件管理操作
+
+**POST** `/admin/ai/v1/skills/{category}/{name}/files`
+
+**查询参数**:
+- `is_custom`: 是否自定义 Skill (true/false)
+- `version`: Skill 版本
+
+**请求体** (创建文件):
+```json
+{
+  "operation": "create",
+  "type": "file",
+  "path": "references/new-doc.md",
+  "content": "# New Document\\n\\nContent here..."
+}
+```
+
+**请求体** (创建文件夹):
+```json
+{
+  "operation": "create",
+  "type": "directory",
+  "path": "prompts"
+}
+```
+
+**请求体** (重命名):
+```json
+{
+  "operation": "rename",
+  "oldPath": "references/old-name.md",
+  "newPath": "references/new-name.md"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "operation": "create",
+    "path": "references/new-doc.md",
+    "type": "file"
+  }
+}
+```
+
+**错误响应** (文件已存在):
+```json
+{
+  "code": 409,
+  "message": "文件已存在",
+  "data": {
+    "path": "references/new-doc.md"
+  }
+}
+```
+
+**错误响应** (非法路径):
+```json
+{
+  "code": 400,
+  "message": "非法路径：不允许使用 .. 或绝对路径",
+  "data": {
+    "path": "../outside/file.md"
+  }
+}
+```
+
+---
+
+#### 2.4.20 删除文件/文件夹
+
+**DELETE** `/admin/ai/v1/skills/{category}/{name}/files`
+
+**查询参数**:
+- `is_custom`: 是否自定义 Skill (true/false)
+- `version`: Skill 版本
+- `path`: 要删除的文件或文件夹路径
+
+**说明**: 
+- 删除文件或文件夹
+- 删除文件夹时会递归删除所有内容
+- **禁止删除 SKILL.md 文件**（返回 400 错误）
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "删除成功",
+  "data": {
+    "path": "references/old-doc.md",
+    "type": "file"
+  }
+}
+```
+
+**错误响应** (禁止删除 SKILL.md):
+```json
+{
+  "code": 400,
+  "message": "不能删除 SKILL.md 主文件",
+  "data": {
+    "path": "SKILL.md"
+  }
+}
+```
+
+---
+
+#### 2.4.21 增强校验
+
+**POST** `/admin/ai/v1/skills/validate-enhanced`
+
+**请求体**:
+```json
+{
+  "content": "---\\nname: pdf-processing\\ndescription: I can help you...\\ntype: rule-based\\n---\\n\\n# Instructions\\n...",
+  "path": "SKILL.md"
+}
+```
+
+**说明**: 
+- 增强版校验，支持描述字段格式检查
+- 检测描述是否使用第三人称（警告但不阻止）
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      {
+        "line": 2,
+        "field": "description",
+        "type": "third_person",
+        "message": "描述建议使用第三人称",
+        "suggestion": "将 'I can help you' 改为 'Extracts and processes PDF files'"
+      }
+    ],
+    "metadata": {
+      "name": "pdf-processing",
+      "description": "I can help you...",
+      "type": "rule-based"
+    }
+  }
+}
+```
+
 ---
 
 ### 2.5 对话历史

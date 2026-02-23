@@ -52,7 +52,7 @@
       </el-form>
       <template #footer><el-button @click="showCreate = false">取消</el-button><el-button type="primary" @click="createSkill" :disabled="!newSkillForm.name">创建</el-button></template>
     </el-dialog>
-    <SkillEditorDialog v-model="showEditor" :category="selectedCategory" :skill="editingSkill" :mode="editorMode" @save="onSkillSaved" />
+    <SkillEditorDialog v-model="showEditor" :category="selectedCategory" :skill="editingSkill" :mode="editorMode" @refresh="loadSkills(selectedCategory)" />
   </div>
 </template>
 

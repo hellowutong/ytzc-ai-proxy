@@ -1,699 +1,863 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="`编辑 Skill: ${skillName} (${currentVersion})`"
-    width="900px"
-    destroy-on-close
-    class="skill-editor-dialog"
+    :title="`Skill 编辑器: ${skillName}`"
     fullscreen
+    class="skill-editor-dialog"
+    :close-on-click-modal="false"
+    destroy-on-close
+    @opened="initLayout"
   >
-    <!-- 校验状态栏 -->
-    <div class="validation-status" :class="validationStatusClass">
-      <el-icon v-if="validationStatus === 'pending'"><Loading /></el-icon>
-      <el-icon v-else-if="validationStatus === 'valid'"><CircleCheck /></el-icon>
-      <el-icon v-else-if="validationStatus === 'invalid'"><CircleClose /></el-icon>
-      <el-icon v-else-if="validationStatus === 'warning'"><Warning /></el-icon>
-      <span>{{ validationStatusText }}</span>
-      <el-button 
-        v-if="validationErrors.length > 0" 
-        link 
-        type="primary" 
-        @click="showValidationDetails"
-      >
-        查看详情
-      </el-button>
-    </div>
-
-    <el-row :gutter="20" class="editor-row">
-      <!-- Editor -->
-      <el-col :span="12">
-        <div class="editor-section">
-          <div class="section-header">
-            <h4>SKILL.md 内容</h4>
-            <div class="editor-actions">
-              <el-select v-model="currentVersion" size="small" style="width: 100px; margin-right: 8px;">
-                <el-option 
-                  v-for="v in availableVersions" 
-                  :key="v" 
-                  :label="v" 
-                  :value="v" 
-                />
-                <el-option divided value="__new__">+ 新增版本</el-option>
-              </el-select>
-              <el-button size="small" @click="validateContent" :loading="validating">
-                ✓ 校验
-              </el-button>
-            </div>
+    <div class="editor-layout">
+      <!-- Left: File Tree -->
+      <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
+        <div class="sidebar-header">
+          <span>资源管理器</span>
+          <div class="actions">
+            <el-tooltip content="新建文件"><el-button link size="small" @click="openCreateDialog('file')"><el-icon><DocumentAdd /></el-icon></el-button></el-tooltip>
+            <el-tooltip content="新建文件夹"><el-button link size="small" @click="openCreateDialog('folder')"><el-icon><FolderAdd /></el-icon></el-button></el-tooltip>
+            <el-tooltip content="刷新"><el-button link size="small" @click="refreshTree"><el-icon><Refresh /></el-icon></el-button></el-tooltip>
           </div>
+        </div>
+        <div class="tree-container">
+          <el-tree
+            ref="fileTreeRef"
+            :data="fileTree"
+            node-key="path"
+            :props="{ label: 'name', children: 'children', isLeaf: 'leaf' }"
+            highlight-current
+            :expand-on-click-node="false"
+            @node-click="handleNodeClick"
+            @node-contextmenu="handleContextMenu"
+          >
+            <template #default="{ node, data }">
+              <span class="custom-tree-node">
+                <el-icon v-if="data.type === 'directory'" class="node-icon"><Folder /></el-icon>
+                <el-icon v-else class="node-icon"><Document /></el-icon>
+                <span class="node-label">{{ node.label }}</span>
+                <span v-if="data.is_dirty" class="dirty-dot">•</span>
+              </span>
+            </template>
+          </el-tree>
+        </div>
+      </div>
+
+      <!-- Middle: Editor -->
+      <div class="editor-main">
+        <div class="editor-tabs" v-if="openFiles.length > 0">
+          <div 
+            v-for="file in openFiles" 
+            :key="file.path"
+            class="tab-item"
+            :class="{ active: activeFilePath === file.path, dirty: file.isDirty }"
+            @click="switchFile(file.path)"
+            @contextmenu.prevent="handleTabContextMenu($event, file)"
+          >
+            <span class="tab-icon">
+              <el-icon v-if="file.name.endsWith('.md')"><Reading /></el-icon>
+              <el-icon v-else-if="file.name.endsWith('.py')"><Operation /></el-icon>
+              <el-icon v-else-if="file.name.endsWith('.json')"><Connection /></el-icon>
+              <el-icon v-else><Document /></el-icon>
+            </span>
+            <span class="tab-name">{{ file.name }}</span>
+            <span class="tab-close" @click.stop="closeFile(file.path)">
+              <el-icon><Close /></el-icon>
+            </span>
+          </div>
+        </div>
+        
+        <div class="editor-content-area" v-show="openFiles.length > 0">
           <div ref="editorContainer" class="monaco-container"></div>
         </div>
-      </el-col>
 
-      <!-- Preview -->
-      <el-col :span="12">
-        <div class="preview-section">
-          <h4>实时预览</h4>
-          <div class="preview-content" v-html="renderedContent"></div>
-        </div>
-      </el-col>
-    </el-row>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <div class="footer-left">
-          <el-button @click="handleSwitchVersion" v-if="availableVersions.length > 1">
-            切换版本
-          </el-button>
-          <el-button type="danger" link @click="handleDeleteVersion" v-if="canDeleteVersion">
-            删除此版本
-          </el-button>
-        </div>
-        <div class="footer-right">
-          <el-button @click="visible = false">取消</el-button>
-          <el-button 
-            type="primary" 
-            @click="handleSave"
-            :disabled="!canSave"
-            :title="saveButtonTitle"
-          >
-            💾 {{ saveButtonText }}
-          </el-button>
+        <div class="empty-editor" v-if="openFiles.length === 0">
+          <div class="empty-state">
+            <el-icon :size="64"><Edit /></el-icon>
+            <p>选择文件开始编辑</p>
+            <p class="sub-text">支持 Markdown, Python, JSON, YAML 等格式</p>
+          </div>
         </div>
       </div>
-    </template>
-  </el-dialog>
 
-  <!-- 校验详情对话框 -->
-  <el-dialog
-    v-model="showValidationDialog"
-    title="校验结果"
-    width="600px"
-    class="validation-dialog"
-  >
-    <div v-if="validationErrors.length > 0" class="validation-section">
-      <h4 class="error-title">
-        <el-icon><CircleClose /></el-icon>
-        错误 ({{ validationErrors.length }})
-      </h4>
-      <div 
-        v-for="(error, index) in validationErrors" 
-        :key="index"
-        class="validation-item error"
-        @click="goToErrorLine(error.line, error.column)"
-      >
-        <div class="error-location">第 {{ error.line }} 行</div>
-        <div class="error-message">{{ error.message }}</div>
-        <div v-if="error.field" class="error-field">字段: {{ error.field }}</div>
+      <!-- Right: Preview (Conditional) -->
+      <div class="preview-panel" v-if="showPreview && activeFileIsMarkdown" :style="{ width: previewWidth + 'px' }">
+        <div class="panel-header">
+          <span>Markdown 预览</span>
+          <div class="actions">
+             <el-button link size="small" @click="togglePreview"><el-icon><Close /></el-icon></el-button>
+          </div>
+        </div>
+        <div class="preview-content markdown-body" v-html="previewContent"></div>
       </div>
     </div>
 
-    <div v-if="validationWarnings.length > 0" class="validation-section">
-      <h4 class="warning-title">
-        <el-icon><Warning /></el-icon>
-        警告 ({{ validationWarnings.length }})
-      </h4>
-      <div 
-        v-for="(warning, index) in validationWarnings" 
-        :key="index"
-        class="validation-item warning"
-      >
-        <div class="warning-location">第 {{ warning.line }} 行</div>
-        <div class="warning-message">{{ warning.message }}</div>
-        <div v-if="warning.suggestion" class="warning-suggestion">
-          建议: {{ warning.suggestion }}
+    <template #footer>
+      <div class="status-bar">
+        <div class="left-status">
+          <el-tag size="small" effect="dark" class="version-tag">
+            <el-icon><PriceTag /></el-icon> {{ currentVersion }}
+          </el-tag>
+          <span v-if="activeFilePath" class="file-path">{{ activeFilePath }}</span>
+          <span v-if="isSaving" class="saving-status"><el-icon class="is-loading"><Loading /></el-icon> 保存中...</span>
+        </div>
+        <div class="right-actions">
+           <el-button-group>
+             <el-button size="small" @click="handleVersionManage">版本管理</el-button>
+             <el-button size="small" @click="togglePreview" v-if="activeFileIsMarkdown">
+               {{ showPreview ? '关闭预览' : '打开预览' }}
+             </el-button>
+             <el-button size="small" type="primary" @click="saveCurrentFile" :disabled="!isCurrentDirty">
+               保存 (Ctrl+S)
+             </el-button>
+           </el-button-group>
         </div>
       </div>
+    </template>
+
+    <!-- Context Menus -->
+    <div v-show="contextMenu.visible" class="context-menu" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
+      <div class="menu-item" @click="openCreateDialog('file', contextMenu.node)">新建文件</div>
+      <div class="menu-item" @click="openCreateDialog('folder', contextMenu.node)">新建文件夹</div>
+      <div class="menu-divider"></div>
+      <div class="menu-item" @click="handleRename(contextMenu.node)">重命名</div>
+      <div class="menu-item delete" @click="handleDelete(contextMenu.node)">删除</div>
     </div>
 
-    <div v-if="validationErrors.length === 0 && validationWarnings.length === 0" class="validation-success">
-      <el-icon :size="48" color="#67C23A"><CircleCheck /></el-icon>
-      <p>校验通过，没有发现错误或警告</p>
-    </div>
+    <!-- Dialogs -->
+    <el-dialog v-model="createDialog.visible" :title="createDialog.type === 'file' ? '新建文件' : '新建文件夹'" width="400px">
+      <el-form @submit.prevent="confirmCreate">
+        <el-form-item label="名称">
+          <el-input v-model="createDialog.name" ref="createInputRef" placeholder="请输入名称" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="confirmCreate">确定</el-button>
+      </template>
+    </el-dialog>
 
-    <template #footer>
-      <el-button @click="showValidationDialog = false">关闭</el-button>
-      <el-button type="primary" @click="handleFixErrors" v-if="validationErrors.length > 0">
-        自动修复
-      </el-button>
-    </template>
-  </el-dialog>
-
-  <!-- 新增版本对话框 -->
-  <el-dialog
-    v-model="showNewVersionDialog"
-    title="新增版本"
-    width="400px"
-  >
-    <el-form label-width="100px">
-      <el-form-item label="新版本号">
-        <el-input v-model="newVersionInput" placeholder="如: v2, v3" />
-      </el-form-item>
-      <el-form-item label="复制来源">
-        <el-radio-group v-model="copyFromVersion">
-          <el-radio label="current">当前版本 ({{ currentVersion }})</el-radio>
-          <el-radio v-for="v in otherVersions" :key="v" :label="v">{{ v }}</el-radio>
-          <el-radio label="blank">空白模板</el-radio>
-        </el-radio-group>
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="showNewVersionDialog = false">取消</el-button>
-      <el-button type="primary" @click="handleCreateNewVersion" :disabled="!newVersionInput">
-        创建
-      </el-button>
-    </template>
+    <el-dialog v-model="versionDialog.visible" title="版本管理" width="500px">
+      <el-table :data="availableVersions.map(v => ({ version: v }))" style="width: 100%">
+        <el-table-column prop="version" label="版本号" />
+        <el-table-column label="操作" width="150">
+          <template #default="scope">
+            <el-button link type="primary" @click="switchVersion(scope.row.version)" :disabled="scope.row.version === currentVersion">
+              {{ scope.row.version === currentVersion ? '当前' : '切换' }}
+            </el-button>
+            <el-button link type="danger" @click="deleteVersion(scope.row.version)" :disabled="scope.row.version === currentVersion">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="new-version-form">
+        <h4>创建新版本</h4>
+        <el-input v-model="versionDialog.newVersion" placeholder="新版本号 (例如 v2)" class="input-with-select">
+          <template #append>
+            <el-button @click="createNewVersion">创建</el-button>
+          </template>
+        </el-input>
+      </div>
+    </el-dialog>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, reactive, markRaw } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Document, Folder, DocumentAdd, FolderAdd, Refresh, 
+  Close, Edit, Reading, Operation, Connection, PriceTag, Loading 
+} from '@element-plus/icons-vue'
 import * as monaco from 'monaco-editor'
 import { marked } from 'marked'
-
-interface ValidationError {
-  line: number
-  column: number
-  field?: string
-  message: string
-}
-
-interface ValidationWarning {
-  line: number
-  message: string
-  suggestion?: string
-}
+import { 
+  getSkillFiles, getFileContent, saveFileContent, 
+  createFile, createFolder, renameItem, deleteFile,
+  type FileNode
+} from '../api/admin/skills'
 
 const props = defineProps<{
   modelValue: boolean
-  category: string | undefined
+  category: string
   skill: any
+  mode?: 'view' | 'edit'
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
+  (e: 'refresh'): void
   (e: 'save', data: { content: string; version: string; isNewVersion: boolean }): void
 }>()
 
+// Layout
+const sidebarWidth = ref(240)
+const previewWidth = ref(400)
+const showPreview = ref(true)
+
+// State
 const visible = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
 })
 
-const editorContainer = ref<HTMLDivElement>()
+const fileTree = ref<FileNode[]>([])
+const currentVersion = ref('v1')
+const availableVersions = ref<string[]>([])
+const openFiles = ref<Array<{ path: string, name: string, content: string, is_custom: boolean, isDirty: boolean }>>([])
+const activeFilePath = ref<string>('')
+const isSaving = ref(false)
+
+// 极其重要的隔离：Monaco 对象绝不能进入 Vue 的响应式系统，否则会锁死主线程
+const monacoModels = new Map<string, monaco.editor.ITextModel>()
+const monacoDisposables = new Map<string, monaco.IDisposable>()
+
+// Editor
+const editorContainer = ref<HTMLElement>()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 
-const defaultContent = `---
-name: ${props.skill?.name || 'skill_name'}
-description: Skill描述
-type: rule-based
-priority: 50
-version: "1.0.0"
-input_schema:
-  type: object
-  properties:
-    query:
-      type: string
-output_schema:
-  type: object
-  properties:
-    result:
-      type: string
----
-
-# Skill 说明
-
-在这里编写 Skill 的详细说明...
-
-## 输入
-
-- query: 查询字符串
-
-## 输出
-
-- result: 处理结果
-
-## 示例
-
-\`\`\`yaml
-input:
-  query: "示例查询"
-output:
-  result: "示例结果"
-\`\`\`
-`
-
-const content = ref(defaultContent)
-const renderedContent = computed(() => {
-  // Extract content after frontmatter
-  const parts = content.value.split('---')
-  if (parts.length >= 3) {
-    return marked(parts.slice(2).join('---'))
-  }
-  return marked(content.value)
+// Context Menu
+const contextMenu = reactive({
+  visible: false,
+  top: 0,
+  left: 0,
+  node: null as any
 })
 
-watch(visible, async (val) => {
+// Dialogs
+const createDialog = reactive({
+  visible: false,
+  type: 'file' as 'file' | 'folder',
+  name: '',
+  parentPath: ''
+})
+const createInputRef = ref()
+
+const versionDialog = reactive({
+  visible: false,
+  newVersion: ''
+})
+
+// Computed
+const skillName = computed(() => props.skill?.name || '')
+const activeFile = computed(() => openFiles.value.find(f => f.path === activeFilePath.value))
+const isCurrentDirty = computed(() => activeFile.value?.isDirty || false)
+const activeFileIsMarkdown = computed(() => activeFile.value?.name.toLowerCase().endsWith('.md'))
+
+const previewContent = computed(() => {
+  if (!activeFile.value || !activeFileIsMarkdown.value) return ''
+  try {
+    return marked(activeFile.value.content)
+  } catch (e) {
+    return 'Markdown error'
+  }
+})
+
+// Watchers
+watch(visible, (val) => {
   if (val) {
-    await nextTick()
-    initEditor()
+    currentVersion.value = props.skill?.current_version || 'v1'
+    availableVersions.value = props.skill?.all_versions || ['v1']
+    nextTick(() => {
+      refreshTree()
+      initEditor()
+    })
   } else {
-    disposeEditor()
+    // Cleanup
+    monacoDisposables.forEach(d => d.dispose())
+    monacoModels.forEach(m => m.dispose())
+    monacoDisposables.clear()
+    monacoModels.clear()
+    openFiles.value = []
+    activeFilePath.value = ''
+    if (editor) {
+      editor.dispose()
+      editor = null
+    }
   }
 })
+
+watch(activeFilePath, (newPath) => {
+  if (!editor || !newPath) return
+  const model = monacoModels.get(newPath)
+  if (model) {
+    editor.setModel(model)
+    editor.focus()
+  }
+})
+
+// Methods
+const initLayout = () => {}
 
 const initEditor = () => {
   if (!editorContainer.value || editor) return
   
-  editor = monaco.editor.create(editorContainer.value, {
-    value: content.value,
-    language: 'markdown',
+  // 使用 markRaw 确保 editor 本身也不被代理
+  editor = markRaw(monaco.editor.create(editorContainer.value, {
+    value: '',
+    language: 'plaintext',
     theme: 'vs-dark',
+    automaticLayout: true,
     minimap: { enabled: false },
     fontSize: 14,
-    lineNumbers: 'on',
-    automaticLayout: true,
+    scrollBeyondLastLine: false,
     wordWrap: 'on'
-  })
-  
-  editor.onDidChangeModelContent(() => {
-    content.value = editor?.getValue() || ''
+  }))
+
+  // Add save command
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    saveCurrentFile()
   })
 }
 
-const disposeEditor = () => {
-  editor?.dispose()
-  editor = null
-}
-
-// ============== 状态管理 ==============
-const validationStatus = ref<'pending' | 'valid' | 'invalid' | 'warning'>('pending')
-const validationErrors = ref<ValidationError[]>([])
-const validationWarnings = ref<ValidationWarning[]>([])
-const validating = ref(false)
-const showValidationDialog = ref(false)
-const showNewVersionDialog = ref(false)
-const newVersionInput = ref('')
-const copyFromVersion = ref('current')
-const currentVersion = ref('v1')
-const availableVersions = ref<string[]>(['v1'])
-const hasContentChanged = ref(false)
-
-const skillName = computed(() => props.skill?.name || 'unnamed')
-
-const otherVersions = computed(() => {
-  return availableVersions.value.filter(v => v !== currentVersion.value)
-})
-
-const canDeleteVersion = computed(() => {
-  return availableVersions.value.length > 1
-})
-
-const canSave = computed(() => {
-  return validationStatus.value === 'valid' || validationStatus.value === 'warning'
-})
-
-const saveButtonText = computed(() => {
-  if (validationStatus.value === 'pending') return '💾 保存（请先校验）'
-  if (validationStatus.value === 'invalid') return '💾 保存（请修复错误）'
-  return '💾 保存'
-})
-
-const saveButtonTitle = computed(() => {
-  if (validationStatus.value === 'pending') return '必须先点击"校验"按钮通过校验才能保存'
-  if (validationStatus.value === 'invalid') return '请修复所有错误后才能保存'
-  return '保存当前内容'
-})
-
-const validationStatusClass = computed(() => {
-  return {
-    'status-pending': validationStatus.value === 'pending',
-    'status-valid': validationStatus.value === 'valid',
-    'status-invalid': validationStatus.value === 'invalid',
-    'status-warning': validationStatus.value === 'warning'
-  }
-})
-
-const validationStatusText = computed(() => {
-  switch (validationStatus.value) {
-    case 'pending': return '待校验 - 请点击"校验"按钮'
-    case 'valid': return '✓ 校验通过，可以保存'
-    case 'invalid': return `✗ 有 ${validationErrors.value.length} 个错误需要修复`
-    case 'warning': return `⚠ 校验通过，但有 ${validationWarnings.value.length} 个警告`
-    default: return ''
-  }
-})
-
-const validateContent = async () => {
-  validating.value = true
-  validationStatus.value = 'pending'
-  
+const refreshTree = async () => {
+  if (!props.category) return
   try {
-    const content = editor?.getValue() || ''
+    console.log('[SkillEditor] Loading file tree for category:', props.category)
     
-    // 调用后端校验API
-    const response = await fetch('/admin/ai/v1/skills/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content })
-    })
+    // 串行获取 system 和 custom skills，避免并发问题
+    let systemData = null
+    let customData = null
     
-    const result = await response.json()
-    
-    if (result.code === 200) {
-      validationErrors.value = result.data.errors || []
-      validationWarnings.value = result.data.warnings || []
-      
-      if (!result.data.valid) {
-        validationStatus.value = 'invalid'
-      } else if (validationWarnings.value.length > 0) {
-        validationStatus.value = 'warning'
-      } else {
-        validationStatus.value = 'valid'
-      }
-      
-      hasContentChanged.value = false
+    try {
+      systemData = await getSkillFiles(props.category, false)
+    } catch (err) {
+      console.error('[SkillEditor] Failed to load system skills:', err)
     }
-  } catch (error) {
-    ElMessage.error('校验请求失败')
-    validationStatus.value = 'invalid'
-  } finally {
-    validating.value = false
-  }
-}
-
-const handleSave = async () => {
-  if (!canSave.value) {
-    ElMessage.warning('请先通过校验才能保存')
-    return
-  }
-  
-  const isNewVersion = newVersionInput.value !== ''
-  
-  emit('save', {
-    content: editor?.getValue() || '',
-    version: isNewVersion ? newVersionInput.value : currentVersion.value,
-    isNewVersion
-  })
-}
-
-const showValidationDetails = () => {
-  showValidationDialog.value = true
-}
-
-const goToErrorLine = (line: number, column: number) => {
-  editor?.setPosition({ lineNumber: line, column: column })
-  editor?.focus()
-  showValidationDialog.value = false
-}
-
-const handleFixErrors = () => {
-  // 自动修复一些常见错误
-  ElMessage.info('自动修复功能开发中...')
-}
-
-const handleSwitchVersion = () => {
-  // 切换版本逻辑
-  console.log('Switch version')
-}
-
-const handleDeleteVersion = async () => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除版本 ${currentVersion.value} 吗？`,
-      '确认删除',
-      { type: 'warning' }
-    )
     
-    const response = await fetch(
-      `/admin/ai/v1/skills/${props.category}/${skillName.value}/versions/${currentVersion.value}`,
-      { method: 'DELETE' }
-    )
-    
-    if (response.ok) {
-      ElMessage.success('版本已删除')
-      // 刷新版本列表
+    try {
+      customData = await getSkillFiles(props.category, true)
+    } catch (err) {
+      console.error('[SkillEditor] Failed to load custom skills:', err)
     }
-  } catch {
-    // 取消删除
-  }
-}
-
-const handleCreateNewVersion = async () => {
-  if (!newVersionInput.value) return
-  
-  const response = await fetch(
-    `/admin/ai/v1/skills/${props.category}/${skillName.value}/versions`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        new_version: newVersionInput.value,
-        copy_from_version: copyFromVersion.value === 'blank' ? null : copyFromVersion.value
+    
+    // 合并文件树
+    const mergedFiles: FileNode[] = []
+    if (systemData?.files) mergedFiles.push(...systemData.files)
+    if (customData?.files) {
+      customData.files.forEach((customVersion) => {
+        const existingVersion = mergedFiles.find(f => f.name === customVersion.name && f.type === 'directory')
+        if (existingVersion && existingVersion.children) {
+          existingVersion.children.push(...(customVersion.children || []))
+        } else {
+          mergedFiles.push(customVersion)
+        }
       })
     }
-  )
-  
-  if (response.ok) {
-    ElMessage.success('新版本创建成功')
-    availableVersions.value.push(newVersionInput.value)
-    currentVersion.value = newVersionInput.value
-    showNewVersionDialog.value = false
-    newVersionInput.value = ''
+    fileTree.value = mergedFiles
+  } catch (error) {
+    ElMessage.error('加载文件树失败')
   }
 }
 
-onUnmounted(() => {
-  disposeEditor()
-})
+const handleNodeClick = async (data: FileNode) => {
+  if (data.type === 'file') {
+    await openFile(data)
+  }
+}
+
+const openFile = async (node: FileNode) => {
+  if (openFiles.value.find(f => f.path === node.path)) {
+    activeFilePath.value = node.path
+    return
+  }
+
+  try {
+    console.log('[SkillEditor] Loading file:', node.path)
+    const isCustom = node.is_custom !== undefined ? node.is_custom : !props.skill?.is_system
+    const res = await getFileContent(props.category, node.path, isCustom)
+    
+    if (!res) {
+      ElMessage.error('无法读取文件内容')
+      return
+    }
+    
+    let language = 'plaintext'
+    if (node.name.endsWith('.md')) language = 'markdown'
+    else if (node.name.endsWith('.py')) language = 'python'
+    else if (node.name.endsWith('.json')) language = 'json'
+
+    // 1. 创建 Model 并使用 markRaw 强制标记为非响应式
+    const uri = monaco.Uri.parse('file:///' + node.path.replace(/\\/g, '/'))
+    const model = markRaw(monaco.editor.createModel(res.content || '', language, uri))
+    
+    // 2. 创建监听器并使用 markRaw
+    const path = node.path
+    const disposable = markRaw(model.onDidChangeContent(() => {
+      const file = openFiles.value.find(f => f.path === path)
+      if (file) {
+        file.content = model.getValue()
+        file.isDirty = true
+      }
+    }))
+
+    // 3. 存储到 Map
+    monacoModels.set(path, model)
+    monacoDisposables.set(path, disposable)
+
+    // 4. 将元数据存入 Vue 数组
+    openFiles.value.push({
+      path: path,
+      name: node.name,
+      content: res.content || '',
+      is_custom: isCustom,
+      isDirty: false
+    })
+    
+    // 5. 使用 nextTick 延迟切换，确保 DOM 已就绪
+    nextTick(() => {
+      activeFilePath.value = path
+    })
+  } catch (error) {
+    console.error('[SkillEditor] Open file error:', error)
+    ElMessage.error('打开文件失败')
+  }
+}
+
+const closeFile = (path: string) => {
+  const index = openFiles.value.findIndex(f => f.path === path)
+  if (index === -1) return
+  
+  const file = openFiles.value[index]
+  
+  // Cleanup Monaco resources from Map
+  const model = monacoModels.get(path)
+  const disposable = monacoDisposables.get(path)
+  if (disposable) disposable.dispose()
+  if (model) model.dispose()
+  monacoModels.delete(path)
+  monacoDisposables.delete(path)
+  
+  if (file.isDirty) {
+    ElMessageBox.confirm('文件未保存，确定要关闭吗？', '提示', {
+      confirmButtonText: '关闭',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      openFiles.value.splice(index, 1)
+      if (activeFilePath.value === path) {
+        activeFilePath.value = openFiles.value.length > 0 ? openFiles.value[openFiles.value.length - 1].path : ''
+      }
+    }).catch(() => {})
+  } else {
+    openFiles.value.splice(index, 1)
+    if (activeFilePath.value === path) {
+      activeFilePath.value = openFiles.value.length > 0 ? openFiles.value[openFiles.value.length - 1].path : ''
+    }
+  }
+}
+
+const switchFile = (path: string) => {
+  activeFilePath.value = path
+}
+
+const saveCurrentFile = async () => {
+  if (!activeFile.value) return
+  isSaving.value = true
+  try {
+    // 这里的 isCustom 逻辑需要和 openFile 保持一致，最好从 meta 信息中获取
+    // 简化处理：先尝试当前 skill 类型
+    const isCustom = activeFile.value.is_custom
+    await saveFileContent({
+      category: props.category,
+      file_path: activeFile.value.path,
+      content: activeFile.value.content,
+      is_custom: isCustom
+    })
+    activeFile.value.isDirty = false
+    ElMessage.success("保存成功")
+  } catch (error) {
+    ElMessage.error("保存失败")
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const togglePreview = () => {
+  showPreview.value = !showPreview.value
+}
+
+const handleContextMenu = (event: MouseEvent, data: FileNode) => {
+  event.preventDefault()
+  contextMenu.visible = true
+  contextMenu.top = event.clientY
+  contextMenu.left = event.clientX
+  contextMenu.node = data
+  document.addEventListener('click', closeContextMenu)
+}
+
+const closeContextMenu = () => {
+  contextMenu.visible = false
+  document.removeEventListener('click', closeContextMenu)
+}
+
+const handleTabContextMenu = (event: MouseEvent, file: any) => {}
+
+const openCreateDialog = (type: 'file' | 'folder', node?: FileNode) => {
+  createDialog.type = type
+  createDialog.visible = true
+  createDialog.name = ''
+  if (node) {
+    createDialog.parentPath = node.type === 'directory' ? node.path : node.path.split('/').slice(0, -1).join('/')
+  } else {
+    createDialog.parentPath = ''
+  }
+  nextTick(() => {
+    createInputRef.value?.focus()
+  })
+}
+
+const confirmCreate = async () => {
+  if (!createDialog.name) return
+  try {
+    const isCustom = !props.skill?.is_system
+    if (createDialog.type === "file") {
+      await createFile({
+        category: props.category,
+        file_name: createDialog.name,
+        parent_path: createDialog.parentPath,
+        is_custom: isCustom
+      })
+    } else {
+      await createFolder({
+        category: props.category,
+        folder_name: createDialog.name,
+        parent_path: createDialog.parentPath,
+        is_custom: isCustom
+      })
+    }
+    createDialog.visible = false
+    refreshTree()
+    ElMessage.success("创建成功")
+  } catch (error: any) {
+    ElMessage.error(error.message || "创建失败")
+  }
+}
+
+const handleRename = (node: FileNode) => {
+  ElMessageBox.prompt('请输入新名称', '重命名', {
+    inputValue: node.name,
+    confirmButtonText: '确定',
+    cancelButtonText: '取消'
+  }).then(async ({ value }) => {
+    if (!value || value === node.name) return
+    try {
+      const isCustom = !props.skill?.is_system
+      await renameItem({
+        category: props.category,
+        old_path: node.path,
+        new_name: value,
+        is_custom: isCustom
+      })
+      refreshTree()
+    } catch (error: any) {
+      ElMessage.error(error.message || '重命名失败')
+    }
+  })
+}
+
+const handleDelete = (node: FileNode) => {
+  ElMessageBox.confirm(`确定要删除 ${node.name} 吗？`, '警告', {
+    type: 'warning'
+  }).then(async () => {
+    try {
+      const isCustom = !props.skill?.is_system
+      await deleteFile(props.category, node.path, isCustom)
+      closeFile(node.path)
+      refreshTree()
+      ElMessage.success('删除成功')
+    } catch (error) {
+      ElMessage.error('删除失败')
+    }
+  })
+}
+
+const handleVersionManage = () => {
+  versionDialog.visible = true
+}
+
+const handleVersionChange = (val: string) => {
+  openFiles.value.forEach(f => {
+      const m = monacoModels.get(f.path)
+      if (m) m.dispose()
+      const d = monacoDisposables.get(f.path)
+      if (d) d.dispose()
+  })
+  monacoModels.clear()
+  monacoDisposables.clear()
+  openFiles.value = []
+  activeFilePath.value = ''
+  refreshTree()
+}
+
+const switchVersion = (ver: string) => {
+  currentVersion.value = ver
+  handleVersionChange(ver)
+  versionDialog.visible = false
+}
+
+const createNewVersion = async () => {
+  ElMessage.info('创建版本功能需后端支持')
+}
+
+const deleteVersion = async (ver: string) => {
+  ElMessage.info('删除版本功能需后端支持')
+}
 </script>
 
 <style scoped>
-.skill-editor-dialog :deep(.el-dialog) {
-  background: #252526;
-  margin: 2vh auto !important;
-  height: 96vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.skill-editor-dialog :deep(.el-dialog__header) {
-  border-bottom: 1px solid #3C3C3C;
-  margin-right: 0;
-  padding: 16px 20px;
-}
-
-.skill-editor-dialog :deep(.el-dialog__title) {
-  color: #CCCCCC;
-}
-
 .skill-editor-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  height: calc(100vh - 54px - 60px);
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+}
+.editor-layout {
+  display: flex;
   flex: 1;
-  padding: 20px;
+  height: 100%;
   overflow: hidden;
 }
-
-.editor-row {
-  height: 100%;
-}
-
-.editor-section,
-.preview-section {
-  height: 100%;
+.sidebar {
+  background: #252526;
+  border-right: 1px solid #333;
   display: flex;
   flex-direction: column;
 }
-
-.editor-section h4,
-.preview-section h4 {
-  color: #CCCCCC;
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.monaco-container {
-  flex: 1;
-  border: 1px solid #3C3C3C;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.preview-content {
-  flex: 1;
-  background: #1E1E1E;
-  border: 1px solid #3C3C3C;
-  border-radius: 4px;
-  padding: 20px;
-  overflow-y: auto;
-  color: #CCCCCC;
-  line-height: 1.8;
-}
-
-.preview-content :deep(h1),
-.preview-content :deep(h2),
-.preview-content :deep(h3) {
-  color: #CCCCCC;
-  margin-top: 24px;
-  margin-bottom: 16px;
-}
-
-.preview-content :deep(code) {
-  background: #2D2D30;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Fira Code', monospace;
-}
-
-.preview-content :deep(pre) {
-  background: #2D2D30;
-  padding: 16px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-.dialog-footer {
+.sidebar-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #bbb;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #252526;
+}
+.tree-container {
+  flex: 1;
+  overflow-y: auto;
+}
+.custom-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   width: 100%;
 }
-
-.footer-left,
-.footer-right {
+.node-icon {
+  color: #c5c5c5;
+}
+.dirty-dot {
+  margin-left: auto;
+  font-size: 16px;
+  line-height: 1;
+  color: #e6a23c;
+}
+:deep(.el-tree) {
+  background: transparent;
+  color: #ccc;
+}
+:deep(.el-tree-node__content:hover) {
+  background-color: #2a2d2e;
+}
+:deep(.el-tree-node:focus > .el-tree-node__content) {
+  background-color: #37373d;
+}
+.editor-main {
+  flex: 1;
   display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  min-width: 0;
+}
+.editor-tabs {
+  display: flex;
+  background: #252526;
+  overflow-x: auto;
+  height: 35px;
+}
+.tab-item {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #2d2d2d;
+  color: #969696;
+  border-right: 1px solid #1e1e1e;
+  cursor: pointer;
+  min-width: 120px;
+  max-width: 200px;
+  font-size: 13px;
+  user-select: none;
+}
+.tab-item.active {
+  background: #1e1e1e;
+  color: #fff;
+  border-top: 1px solid #007acc;
+}
+.tab-item.dirty .tab-name::before {
+  content: '●';
+  font-size: 8px;
+  margin-right: 4px;
+  color: #fff;
+}
+.tab-icon {
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+}
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-close {
+  margin-left: 6px;
+  opacity: 0;
+  border-radius: 3px;
+  padding: 2px;
+}
+.tab-item:hover .tab-close {
+  opacity: 1;
+}
+.tab-close:hover {
+  background: #444;
+}
+.editor-content-area {
+  flex: 1;
+  position: relative;
+}
+.monaco-container {
+  width: 100%;
+  height: 100%;
+}
+.empty-editor {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+}
+.empty-state {
+  text-align: center;
+}
+.empty-state .el-icon {
+  margin-bottom: 16px;
+  color: #333;
+}
+.sub-text {
+  font-size: 12px;
+  color: #444;
+  margin-top: 8px;
+}
+.preview-panel {
+  background: #1e1e1e;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+.panel-header {
+  height: 35px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #252526;
+  color: #bbb;
+  font-size: 12px;
+  font-weight: bold;
+}
+.preview-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  color: #ccc;
+}
+.status-bar {
+  height: 24px;
+  background: #007acc;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.skill-editor-dialog :deep(.el-dialog__footer) {
+  padding: 0;
+}
+.left-status {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
-
-/* 校验状态栏 */
-.validation-status {
+.version-tag {
+  height: 18px;
+  line-height: 16px;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+.right-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  margin-bottom: 16px;
-  border-radius: 4px;
-  font-size: 14px;
 }
-
-.status-pending {
-  background: #2D2D30;
-  color: #CCCCCC;
-  border: 1px solid #3C3C3C;
+.right-actions .el-button {
+  padding: 2px 8px;
+  height: 20px;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  color: #fff;
 }
-
-.status-valid {
-  background: #1E3A1E;
-  color: #67C23A;
-  border: 1px solid #67C23A;
+.right-actions .el-button:hover {
+  background: rgba(255,255,255,0.1);
 }
-
-.status-invalid {
-  background: #3A1E1E;
-  color: #F56C6C;
-  border: 1px solid #F56C6C;
+.context-menu {
+  position: fixed;
+  background: #252526;
+  border: 1px solid #454545;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  z-index: 9999;
+  min-width: 160px;
+  padding: 4px 0;
 }
-
-.status-warning {
-  background: #3A3A1E;
-  color: #E6A23C;
-  border: 1px solid #E6A23C;
-}
-
-/* Section header */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.section-header h4 {
-  margin: 0;
-  color: #CCCCCC;
-}
-
-.editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Validation dialog */
-.validation-dialog :deep(.el-dialog__body) {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.validation-section {
-  margin-bottom: 24px;
-}
-
-.error-title,
-.warning-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.error-title {
-  color: #F56C6C;
-}
-
-.warning-title {
-  color: #E6A23C;
-}
-
-.validation-item {
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 4px;
+.menu-item {
+  padding: 6px 16px;
   cursor: pointer;
-  transition: all 0.3s;
+  color: #ccc;
+  font-size: 13px;
 }
-
-.validation-item:hover {
-  filter: brightness(1.1);
+.menu-item:hover {
+  background: #094771;
+  color: #fff;
 }
-
-.validation-item.error {
-  background: rgba(245, 108, 108, 0.1);
-  border-left: 4px solid #F56C6C;
+.menu-divider {
+  height: 1px;
+  background: #454545;
+  margin: 4px 0;
 }
-
-.validation-item.warning {
-  background: rgba(230, 162, 60, 0.1);
-  border-left: 4px solid #E6A23C;
+.menu-item.delete:hover {
+  background: #8b0000;
 }
-
-.error-location,
-.warning-location {
-  font-size: 12px;
-  color: #858585;
-  margin-bottom: 4px;
-}
-
-.error-message,
-.warning-message {
+.markdown-body {
+  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;
   font-size: 14px;
-  color: #CCCCCC;
-  margin-bottom: 4px;
+  line-height: 1.6;
 }
-
-.error-field,
-.warning-suggestion {
-  font-size: 12px;
-  color: #858585;
+.markdown-body :deep(h1), .markdown-body :deep(h2) {
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.3em;
 }
-
-.validation-success {
-  text-align: center;
-  padding: 40px;
-  color: #67C23A;
+.markdown-body :deep(code) {
+  background-color: rgba(110,118,129,0.4);
+  border-radius: 6px;
+  padding: 0.2em 0.4em;
 }
-
-.validation-success p {
-  margin-top: 16px;
-  color: #CCCCCC;
+.markdown-body :deep(pre) {
+  background-color: #161b22;
+  padding: 16px;
+  border-radius: 6px;
+  overflow: auto;
 }
 </style>

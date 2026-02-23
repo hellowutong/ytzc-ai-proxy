@@ -122,10 +122,10 @@ services:
       - "8000:8000"
     volumes:
       - ../backend:/app
-      - ../config.yml:/app/config.yml
+      - ../config.yml:/app/config.yml:ro
       - ../upload:/app/upload
       - ../logs:/app/logs
-      - ../skills:/app/skills
+      - ../skills:/app/skills:ro
     environment:
       - PYTHONPATH=/app
       - ENVIRONMENT=production
