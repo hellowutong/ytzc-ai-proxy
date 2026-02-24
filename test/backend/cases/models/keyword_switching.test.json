@@ -1,0 +1,382 @@
+{
+  "test_suite": "KeywordSwitching",
+  "description": "关键字模型切换功能后端测试套件",
+  "author": "developer",
+  "created_at": "2026-02-11",
+  "test_cases": [
+    {
+      "id": "B-TC001",
+      "name": "test_keyword_config_validation",
+      "description": "关键词配置验证",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["validation", "positive"],
+      "component": "KeywordConfig",
+      "preconditions": [
+        "后端服务已启动",
+        "Pydantic 模型已加载"
+      ],
+      "inputs": {
+        "enabled": true,
+        "small_keywords": ["简单", "快速"],
+        "big_keywords": ["复杂", "详细"]
+      },
+      "expected": {
+        "model_created": true,
+        "enabled": true,
+        "small_keywords_count": 2,
+        "big_keywords_count": 2
+      },
+      "assertions": [
+        "assert config.enabled == True",
+        "assert len(config.small_keywords) == 2",
+        "assert len(config.big_keywords) == 2"
+      ]
+    },
+    {
+      "id": "B-TC002",
+      "name": "test_keyword_config_max_length",
+      "description": "关键词长度限制验证（50字符）",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["validation", "boundary"],
+      "component": "KeywordConfig",
+      "preconditions": [
+        "后端服务已启动"
+      ],
+      "inputs": {
+        "enabled": true,
+        "small_keywords": ["a" * 51],
+        "big_keywords": []
+      },
+      "expected": {
+        "validation_error": true,
+        "error_message": "关键词长度不能超过50字符"
+      },
+      "assertions": [
+        "assert raises ValueError",
+        "assert '不能超过50字符' in str(error)"
+      ]
+    },
+    {
+      "id": "B-TC003",
+      "name": "test_keyword_config_max_count",
+      "description": "关键词数量限制验证（50个）",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["validation", "boundary"],
+      "component": "KeywordConfig",
+      "preconditions": [
+        "后端服务已启动"
+      ],
+      "inputs": {
+        "enabled": true,
+        "small_keywords": ["keyword" + str(i) for i in range(51)],
+        "big_keywords": []
+      },
+      "expected": {
+        "validation_error": true,
+        "max_limit": 50
+      },
+      "assertions": [
+        "assert raises ValidationError",
+        "assert 'max_length' in str(error)"
+      ]
+    },
+    {
+      "id": "B-TC004",
+      "name": "test_keyword_router_small_match",
+      "description": "小模型关键词匹配触发切换",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["routing", "positive"],
+      "component": "ModelRouter",
+      "preconditions": [
+        "模型 demo1 已配置",
+        "keyword_switching.enabled=true",
+        "small_keywords=[\"简单\", \"快速\"]"
+      ],
+      "inputs": {
+        "user_input": "这是一个简单问题",
+        "model_config": {
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["简单", "快速"],
+            "big_keywords": ["复杂"]
+          }
+        }
+      },
+      "expected": {
+        "model_type": "small",
+        "matched_rule": "keyword:简单",
+        "confidence": 1.0
+      },
+      "assertions": [
+        "assert result.model_type == 'small'",
+        "assert result.matched_rule == 'keyword:简单'",
+        "assert result.confidence == 1.0"
+      ]
+    },
+    {
+      "id": "B-TC005",
+      "name": "test_keyword_router_big_match",
+      "description": "大模型关键词匹配触发切换",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["routing", "positive"],
+      "component": "ModelRouter",
+      "preconditions": [
+        "模型 demo1 已配置",
+        "keyword_switching.enabled=true",
+        "big_keywords=[\"复杂\", \"详细\"]"
+      ],
+      "inputs": {
+        "user_input": "请详细解释这个概念",
+        "model_config": {
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["简单"],
+            "big_keywords": ["复杂", "详细"]
+          }
+        }
+      },
+      "expected": {
+        "model_type": "big",
+        "matched_rule": "keyword:详细",
+        "confidence": 1.0
+      },
+      "assertions": [
+        "assert result.model_type == 'big'",
+        "assert result.matched_rule == 'keyword:详细'",
+        "assert result.confidence == 1.0"
+      ]
+    },
+    {
+      "id": "B-TC006",
+      "name": "test_keyword_router_disabled",
+      "description": "关键字切换禁用时不影响路由，使用Skill路由",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["routing", "negative"],
+      "component": "ModelRouter",
+      "preconditions": [
+        "模型 demo1 已配置",
+        "keyword_switching.enabled=false"
+      ],
+      "inputs": {
+        "user_input": "这是一个简单问题",
+        "model_config": {
+          "keyword_switching": {
+            "enabled": false,
+            "small_keywords": ["简单"],
+            "big_keywords": ["复杂"]
+          }
+        }
+      },
+      "expected": {
+        "uses_skill_router": true,
+        "keyword_result": null
+      },
+      "assertions": [
+        "assert keyword_result is None",
+        "assert skill_manager.execute was called"
+      ]
+    },
+    {
+      "id": "B-TC007",
+      "name": "test_keyword_router_no_match",
+      "description": "无匹配时返回 None，进入下一优先级",
+      "category": "integration",
+      "priority": "P1",
+      "tags": ["routing", "negative"],
+      "component": "ModelRouter",
+      "preconditions": [
+        "模型 demo1 已配置",
+        "keyword_switching.enabled=true"
+      ],
+      "inputs": {
+        "user_input": "这是一个普通问题，没有匹配任何关键词",
+        "model_config": {
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["简单"],
+            "big_keywords": ["复杂"]
+          }
+        }
+      },
+      "expected": {
+        "result": null
+      },
+      "assertions": [
+        "assert result is None"
+      ]
+    },
+    {
+      "id": "B-TC008",
+      "name": "test_keyword_router_force_current_priority",
+      "description": "force_current优先级高于关键字切换",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["routing", "priority"],
+      "component": "ModelRouter",
+      "preconditions": [
+        "模型 demo1 已配置",
+        "force_current=true",
+        "current=big",
+        "keyword_switching.enabled=true",
+        "small_keywords 包含匹配词"
+      ],
+      "inputs": {
+        "user_input": "简单问题",
+        "model_config": {
+          "force_current": true,
+          "current": "big",
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["简单"],
+            "big_keywords": []
+          }
+        }
+      },
+      "expected": {
+        "model_type": "big",
+        "reason": "强制模式"
+      },
+      "assertions": [
+        "assert result.model_type == 'big'",
+        "assert result.reason == '强制模式'",
+        "assert result.confidence == 1.0"
+      ]
+    },
+    {
+      "id": "B-TC009",
+      "name": "test_api_create_model_with_keywords",
+      "description": "API创建带关键词配置的模型",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["api", "positive"],
+      "component": "VirtualModelsAPI",
+      "preconditions": [
+        "后端服务运行在 localhost:8000"
+      ],
+      "inputs": {
+        "request": {
+          "method": "POST",
+          "url": "/admin/ai/v1/virtual-models",
+          "body": {
+            "name": "test-keyword-model",
+            "keyword_switching": {
+              "enabled": true,
+              "small_keywords": ["简单", "快速"],
+              "big_keywords": ["复杂", "详细"]
+            }
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "response": {
+          "code": 200,
+          "message": "模型创建成功"
+        },
+        "model_has_keyword_switching": true
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['code'] == 200",
+        "assert 'keyword_switching' in response.json()['data']",
+        "assert response.json()['data']['keyword_switching']['enabled'] == True"
+      ]
+    },
+    {
+      "id": "B-TC010",
+      "name": "test_api_update_model_keywords",
+      "description": "API更新模型关键词配置",
+      "category": "api",
+      "priority": "P0",
+      "tags": ["api", "positive"],
+      "component": "VirtualModelsAPI",
+      "preconditions": [
+        "模型 test-model 已存在"
+      ],
+      "inputs": {
+        "request": {
+          "method": "PUT",
+          "url": "/admin/ai/v1/virtual-models/test-model",
+          "body": {
+            "keyword_switching": {
+              "enabled": true,
+              "small_keywords": ["新问题"],
+              "big_keywords": ["新问题"]
+            }
+          }
+        }
+      },
+      "expected": {
+        "status_code": 200,
+        "updated_keywords": ["新问题"]
+      },
+      "assertions": [
+        "assert response.status_code == 200",
+        "assert response.json()['data']['keyword_switching']['small_keywords'] == ['新问题']"
+      ]
+    },
+    {
+      "id": "B-TC011",
+      "name": "test_config_persistence",
+      "description": "关键词配置持久化到 config.yml",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["persistence", "positive"],
+      "component": "ConfigManager",
+      "preconditions": [
+        "config.yml 可写入"
+      ],
+      "inputs": {
+        "model_name": "demo1",
+        "keyword_switching": {
+          "enabled": true,
+          "small_keywords": ["简单"],
+          "big_keywords": ["复杂"]
+        }
+      },
+      "expected": {
+        "saved_to_config": true,
+        "retains_after_reload": true
+      },
+      "assertions": [
+        "assert keyword_switching in config.yml",
+        "assert after reload, keyword_switching is preserved"
+      ]
+    },
+    {
+      "id": "B-TC012",
+      "name": "test_config_backward_compatibility",
+      "description": "旧配置（无keyword_switching）能正确加载",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["compatibility", "boundary"],
+      "component": "VirtualModel",
+      "preconditions": [
+        "config.yml 中有旧模型配置，无 keyword_switching 字段"
+      ],
+      "inputs": {
+        "old_config": {
+          "name": "old-model",
+          "current": "small",
+          "use": true
+        }
+      },
+      "expected": {
+        "loads_successfully": true,
+        "default_enabled": false,
+        "default_keywords": []
+      },
+      "assertions": [
+        "assert model.keyword_switching.enabled == False",
+        "assert model.keyword_switching.small_keywords == []",
+        "assert model.keyword_switching.big_keywords == []"
+      ]
+    }
+  ]
+}

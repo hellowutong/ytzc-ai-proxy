@@ -36,13 +36,10 @@
       <span>知识库</span>
     </el-menu-item>
     
-    <el-sub-menu index="media">
-      <template #title>
-        <el-icon><VideoCamera /></el-icon>
-        <span>媒体处理</span>
-      </template>
-      <el-menu-item index="/admin/media">队列管理</el-menu-item>
-    </el-sub-menu>
+    <el-menu-item index="/admin/media">
+      <el-icon><VideoCamera /></el-icon>
+      <span>媒体处理</span>
+    </el-menu-item>
     
     <el-menu-item index="/admin/rss">
       <el-icon><Bell /></el-icon>

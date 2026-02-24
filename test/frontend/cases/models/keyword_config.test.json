@@ -1,0 +1,380 @@
+{
+  "test_suite": "KeywordConfigUI",
+  "description": "关键字模型切换前端UI测试套件",
+  "author": "developer",
+  "created_at": "2026-02-11",
+  "test_cases": [
+    {
+      "id": "F-TC001",
+      "name": "test_keyword_toggle_renders",
+      "description": "关键字切换开关正确渲染在启用状态下方",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["rendering", "ui", "positive"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "前端运行在 localhost:5173",
+        "已导航到 /admin/models"
+      ],
+      "inputs": {},
+      "actions": [
+        {"type": "click", "target": "[data-testid='add-model-btn']"}
+      ],
+      "expected": {
+        "dialog_open": true,
+        "keyword_toggle_visible": true,
+        "toggle_position": "after use switch"
+      },
+      "assertions": [
+        "expect(wrapper.find('.el-dialog')).toBeVisible()",
+        "expect(wrapper.text()).toContain('关键字模型切换')",
+        "expect(wrapper.findAll('.el-form-item__label')[4].text()).toBe('关键字模型切换')"
+      ]
+    },
+    {
+      "id": "F-TC002",
+      "name": "test_keyword_input_visibility",
+      "description": "开启开关后显示关键词输入区域",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["interaction", "ui", "positive"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "对话框已打开"
+      ],
+      "inputs": {
+        "toggle_enabled": true
+      },
+      "actions": [
+        {"type": "click", "target": "keyword-switching-toggle"}
+      ],
+      "expected": {
+        "small_keywords_input_visible": true,
+        "big_keywords_input_visible": true,
+        "keyword_tag_input_count": 2
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.keyword-tag-input')).toHaveLength(2)",
+        "expect(wrapper.text()).toContain('小模型关键词')",
+        "expect(wrapper.text()).toContain('大模型关键词')"
+      ]
+    },
+    {
+      "id": "F-TC003",
+      "name": "test_keyword_input_hidden_when_disabled",
+      "description": "关闭开关时隐藏关键词输入区域",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["interaction", "ui", "negative"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "对话框已打开",
+        "关键字切换开关已开启"
+      ],
+      "inputs": {
+        "toggle_enabled": true
+      },
+      "actions": [
+        {"type": "click", "target": "keyword-switching-toggle"},
+        {"type": "click", "target": "keyword-switching-toggle"}
+      ],
+      "expected": {
+        "keyword_inputs_hidden": true
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.keyword-tag-input')).toHaveLength(0)",
+        "expect(wrapper.text()).not.toContain('小模型关键词')"
+      ]
+    },
+    {
+      "id": "F-TC004",
+      "name": "test_tag_input_add",
+      "description": "关键词标签添加功能（回车/按钮）",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["interaction", "positive"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "关键字切换已启用",
+        "小模型关键词输入框可见"
+      ],
+      "inputs": {
+        "keyword": "测试关键词"
+      },
+      "actions": [
+        {"type": "click", "target": "add-tag-button"},
+        {"type": "fill", "target": "tag-input", "value": "测试关键词"},
+        {"type": "keypress", "target": "tag-input", "key": "Enter"}
+      ],
+      "expected": {
+        "tag_added": true,
+        "tag_count": 1,
+        "tag_text": "测试关键词"
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-tag')).toHaveLength(1)",
+        "expect(wrapper.find('.el-tag').text()).toBe('测试关键词')",
+        "expect(wrapper.emitted()['update:modelValue'][0]).toEqual([['测试关键词']])"
+      ]
+    },
+    {
+      "id": "F-TC005",
+      "name": "test_tag_input_remove",
+      "description": "关键词标签删除功能（点击x）",
+      "category": "unit",
+      "priority": "P0",
+      "tags": ["interaction", "positive"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "已添加关键词 ['测试1', '测试2']"
+      ],
+      "inputs": {
+        "remove_index": 0
+      },
+      "actions": [
+        {"type": "click", "target": ".el-tag__close:first"}
+      ],
+      "expected": {
+        "tag_removed": true,
+        "remaining_tags": 1,
+        "remaining_text": "测试2"
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-tag')).toHaveLength(1)",
+        "expect(wrapper.find('.el-tag').text()).toBe('测试2')",
+        "expect(wrapper.emitted()['update:modelValue'][0]).toEqual([['测试2']])"
+      ]
+    },
+    {
+      "id": "F-TC006",
+      "name": "test_tag_input_max_limit",
+      "description": "关键词数量上限限制（50个）",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["validation", "boundary"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "已添加 50 个关键词"
+      ],
+      "inputs": {
+        "existing_tags": ["tag" + str(i) for i in range(50)],
+        "new_keyword": "额外关键词"
+      },
+      "actions": [
+        {"type": "click", "target": "add-tag-button"},
+        {"type": "fill", "target": "tag-input", "value": "额外关键词"},
+        {"type": "keypress", "target": "tag-input", "key": "Enter"}
+      ],
+      "expected": {
+        "tag_not_added": true,
+        "tag_count_still": 50,
+        "add_button_disabled": true
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-tag')).toHaveLength(50)",
+        "expect(wrapper.find('add-tag-button').attributes('disabled')).toBeDefined()"
+      ]
+    },
+    {
+      "id": "F-TC007",
+      "name": "test_tag_input_duplicate",
+      "description": "重复关键词不添加",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["validation", "negative"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "已添加关键词 ['测试']"
+      ],
+      "inputs": {
+        "existing_tags": ["测试"],
+        "new_keyword": "测试"
+      },
+      "actions": [
+        {"type": "click", "target": "add-tag-button"},
+        {"type": "fill", "target": "tag-input", "value": "测试"},
+        {"type": "keypress", "target": "tag-input", "key": "Enter"}
+      ],
+      "expected": {
+        "duplicate_not_added": true,
+        "tag_count_still": 1
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-tag')).toHaveLength(1)",
+        "expect(wrapper.emitted()['update:modelValue']).toBeUndefined()"
+      ]
+    },
+    {
+      "id": "F-TC008",
+      "name": "test_tag_input_empty",
+      "description": "空关键词不添加",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["validation", "negative"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "组件已挂载"
+      ],
+      "inputs": {
+        "new_keyword": ""
+      },
+      "actions": [
+        {"type": "click", "target": "add-tag-button"},
+        {"type": "fill", "target": "tag-input", "value": ""},
+        {"type": "keypress", "target": "tag-input", "key": "Enter"}
+      ],
+      "expected": {
+        "empty_not_added": true,
+        "tag_count": 0
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-tag')).toHaveLength(0)",
+        "expect(wrapper.emitted()['update:modelValue']).toBeUndefined()"
+      ]
+    },
+    {
+      "id": "F-TC009",
+      "name": "test_tag_input_max_length",
+      "description": "关键词长度限制（50字符）",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["validation", "boundary"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "组件已挂载"
+      ],
+      "inputs": {
+        "new_keyword": "a" * 51
+      },
+      "actions": [
+        {"type": "click", "target": "add-tag-button"},
+        {"type": "fill", "target": "tag-input", "value": "a" * 51}
+      ],
+      "expected": {
+        "input_limited": true,
+        "max_length": 50
+      },
+      "assertions": [
+        "expect(inputRef.value.length).toBeLessThanOrEqual(50)"
+      ]
+    },
+    {
+      "id": "F-TC010",
+      "name": "test_tag_input_counter",
+      "description": "显示当前数量/最大数量",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["rendering", "ui"],
+      "component": "KeywordTagInput",
+      "preconditions": [
+        "已添加 3 个关键词"
+      ],
+      "inputs": {
+        "tags": ["tag1", "tag2", "tag3"]
+      },
+      "expected": {
+        "counter_visible": true,
+        "counter_text": "已添加 3/50 个关键词"
+      },
+      "assertions": [
+        "expect(wrapper.find('.counter').exists()).toBe(true)",
+        "expect(wrapper.find('.counter').text()).toBe('已添加 3/50 个关键词')"
+      ]
+    },
+    {
+      "id": "F-TC011",
+      "name": "test_model_dialog_submit_with_keywords",
+      "description": "表单提交包含关键词数据",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["integration", "positive"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "对话框已打开",
+        "关键字切换已启用",
+        "已添加小模型关键词 ['简单']",
+        "已添加大模型关键词 ['复杂']"
+      ],
+      "inputs": {
+        "form_data": {
+          "name": "test-model",
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["简单"],
+            "big_keywords": ["复杂"]
+          }
+        }
+      },
+      "actions": [
+        {"type": "click", "target": "submit-button"}
+      ],
+      "expected": {
+        "submit_event_fired": true,
+        "keyword_data_included": true
+      },
+      "assertions": [
+        "expect(wrapper.emitted('submit')).toBeTruthy()",
+        "expect(wrapper.emitted('submit')[0][0].keyword_switching.enabled).toBe(true)",
+        "expect(wrapper.emitted('submit')[0][0].keyword_switching.small_keywords).toEqual(['简单'])",
+        "expect(wrapper.emitted('submit')[0][0].keyword_switching.big_keywords).toEqual(['复杂'])"
+      ]
+    },
+    {
+      "id": "F-TC012",
+      "name": "test_model_dialog_load_keywords",
+      "description": "编辑时正确加载已保存关键词",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["integration", "positive"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "编辑现有模型",
+        "模型数据包含 keyword_switching"
+      ],
+      "inputs": {
+        "model": {
+          "name": "demo1",
+          "keyword_switching": {
+            "enabled": true,
+            "small_keywords": ["快速", "简单"],
+            "big_keywords": ["详细"]
+          }
+        }
+      },
+      "expected": {
+        "toggle_enabled": true,
+        "small_keywords_loaded": ["快速", "简单"],
+        "big_keywords_loaded": ["详细"]
+      },
+      "assertions": [
+        "expect(form.keyword_switching.enabled).toBe(true)",
+        "expect(form.keyword_switching.small_keywords).toEqual(['快速', '简单'])",
+        "expect(form.keyword_switching.big_keywords).toEqual(['详细'])",
+        "expect(wrapper.findAll('.keyword-tag-input')[0].findAll('.el-tag')).toHaveLength(2)"
+      ]
+    },
+    {
+      "id": "F-TC013",
+      "name": "test_model_dialog_default_values",
+      "description": "新建模型时关键词切换默认关闭",
+      "category": "unit",
+      "priority": "P1",
+      "tags": ["default", "boundary"],
+      "component": "ModelDialog",
+      "preconditions": [
+        "添加新模型（非编辑）"
+      ],
+      "inputs": {},
+      "expected": {
+        "default_enabled": false,
+        "default_small_keywords": [],
+        "default_big_keywords": []
+      },
+      "assertions": [
+        "expect(form.keyword_switching.enabled).toBe(false)",
+        "expect(form.keyword_switching.small_keywords).toEqual([])",
+        "expect(form.keyword_switching.big_keywords).toEqual([])"
+      ]
+    }
+  ]
+}

@@ -238,6 +238,10 @@ def get_skills_from_category(category: str) -> List[SkillInfo]:
     skills = []
     system_path, custom_path = get_skill_directories(category)
     
+    # 预先收集所有可用的系统和自定义版本
+    all_system_versions = sorted([d.name for d in system_path.iterdir() if d.is_dir() and is_version_directory(d.name)]) if system_path.exists() else ["v1"]
+    all_custom_versions = sorted([d.name for d in custom_path.iterdir() if d.is_dir() and is_version_directory(d.name)]) if custom_path.exists() else ["v1"]
+
     # 收集 system skills
     if system_path.exists():
         for version_dir in system_path.iterdir():
@@ -250,15 +254,12 @@ def get_skills_from_category(category: str) -> List[SkillInfo]:
                         
                         # 检查是否已存在同名 skill
                         existing = next((s for s in skills if s.name == metadata["name"]), None)
-                        if existing:
-                            if version not in existing.all_versions:
-                                existing.all_versions.append(version)
-                        else:
+                        if not existing:
                             skills.append(SkillInfo(
                                 name=metadata["name"],
                                 is_system=True,
                                 current_version=version,
-                                all_versions=[version],
+                                all_versions=all_system_versions,  # 使用全局版本列表
                                 description=metadata["description"],
                                 type=metadata["type"],
                                 enabled=metadata["enabled"]
@@ -276,15 +277,12 @@ def get_skills_from_category(category: str) -> List[SkillInfo]:
                         
                         # 检查是否已存在同名 skill
                         existing = next((s for s in skills if s.name == metadata["name"] and not s.is_system), None)
-                        if existing:
-                            if version not in existing.all_versions:
-                                existing.all_versions.append(version)
-                        else:
+                        if not existing:
                             skills.append(SkillInfo(
                                 name=metadata["name"],
                                 is_system=False,
                                 current_version=version,
-                                all_versions=[version],
+                                all_versions=all_custom_versions,  # 使用全局版本列表
                                 description=metadata["description"],
                                 type=metadata["type"],
                                 enabled=metadata["enabled"]
@@ -854,12 +852,10 @@ async def file_operation(operation: str, request: Dict[str, Any]):
     """文件管理操作（创建/重命名）"""
     try:
         category = request.get("category")
-        name = request.get("name")
-        version = request.get("version", "v1")
         is_custom = request.get("is_custom", True)
         
         scope = "custom" if is_custom else "system"
-        skill_dir = SKILL_ROOT / scope / category / version / name
+        category_dir = SKILL_ROOT / scope / category
         
         if operation == "create_file":
             file_name = request.get("file_name")
@@ -869,11 +865,11 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             if not file_name or not file_name.endswith(('.md', '.py')):
                 return {"code": 400, "message": "文件名必须以 .md 或 .py 结尾", "data": None}
             
-            file_full_path = skill_dir / parent_path / file_name
+            file_full_path = category_dir / parent_path / file_name
             
             # 检查路径安全
             try:
-                file_full_path.resolve().relative_to(skill_dir.resolve())
+                file_full_path.resolve().relative_to(category_dir.resolve())
             except ValueError:
                 return {"code": 403, "message": "非法文件路径", "data": None}
             
@@ -884,7 +880,7 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             file_full_path.parent.mkdir(parents=True, exist_ok=True)
             file_full_path.write_text("", encoding='utf-8')
             
-            return {"code": 200, "message": "文件创建成功", "data": {"path": str(file_full_path.relative_to(skill_dir))}}
+            return {"code": 200, "message": "文件创建成功", "data": {"path": str(file_full_path.relative_to(category_dir))}}
         
         elif operation == "create_folder":
             folder_name = request.get("folder_name")
@@ -893,11 +889,11 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             if not folder_name:
                 return {"code": 400, "message": "文件夹名不能为空", "data": None}
             
-            folder_full_path = skill_dir / parent_path / folder_name
+            folder_full_path = category_dir / parent_path / folder_name
             
             # 检查路径安全
             try:
-                folder_full_path.resolve().relative_to(skill_dir.resolve())
+                folder_full_path.resolve().relative_to(category_dir.resolve())
             except ValueError:
                 return {"code": 403, "message": "非法文件夹路径", "data": None}
             
@@ -907,7 +903,7 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             # 创建文件夹
             folder_full_path.mkdir(parents=True, exist_ok=True)
             
-            return {"code": 200, "message": "文件夹创建成功", "data": {"path": str(folder_full_path.relative_to(skill_dir))}}
+            return {"code": 200, "message": "文件夹创建成功", "data": {"path": str(folder_full_path.relative_to(category_dir))}}
         
         elif operation == "rename":
             old_path = request.get("old_path")
@@ -916,13 +912,13 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             if not old_path or not new_name:
                 return {"code": 400, "message": "缺少必要参数", "data": None}
             
-            old_full_path = skill_dir / old_path
+            old_full_path = category_dir / old_path
             new_full_path = old_full_path.parent / new_name
             
             # 检查路径安全
             try:
-                old_full_path.resolve().relative_to(skill_dir.resolve())
-                new_full_path.resolve().relative_to(skill_dir.resolve())
+                old_full_path.resolve().relative_to(category_dir.resolve())
+                new_full_path.resolve().relative_to(category_dir.resolve())
             except ValueError:
                 return {"code": 403, "message": "非法文件路径", "data": None}
             
@@ -935,7 +931,7 @@ async def file_operation(operation: str, request: Dict[str, Any]):
             # 重命名
             old_full_path.rename(new_full_path)
             
-            return {"code": 200, "message": "重命名成功", "data": {"path": str(new_full_path.relative_to(skill_dir))}}
+            return {"code": 200, "message": "重命名成功", "data": {"path": str(new_full_path.relative_to(category_dir))}}
         
         else:
             return {"code": 400, "message": f"未知操作: {operation}", "data": None}
@@ -947,20 +943,18 @@ async def file_operation(operation: str, request: Dict[str, Any]):
 @router.delete("/skill-files")
 async def delete_file_or_folder(
     category: str,
-    name: str,
     file_path: str,
-    version: str = Query(default="v1"),
     is_custom: bool = Query(default=True)
 ):
     """删除文件或文件夹"""
     try:
         scope = "custom" if is_custom else "system"
-        skill_dir = SKILL_ROOT / scope / category / version / name
-        file_full_path = skill_dir / file_path
+        category_dir = SKILL_ROOT / scope / category
+        file_full_path = category_dir / file_path
         
         # 检查路径安全
         try:
-            file_full_path.resolve().relative_to(skill_dir.resolve())
+            file_full_path.resolve().relative_to(category_dir.resolve())
         except ValueError:
             return {"code": 403, "message": "非法文件路径", "data": None}
         

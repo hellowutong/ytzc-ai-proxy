@@ -1,0 +1,146 @@
+{
+  "test_suite": "ConversationsManager",
+  "description": "对话历史管理测试套件",
+  "test_cases": [
+    {
+      "id": "F-TC001",
+      "name": "test_batch_delete_button_disabled_when_no_selection",
+      "description": "测试未选择对话时批量删除按钮禁用",
+      "category": "component",
+      "priority": "P0",
+      "tags": ["batch_delete", "ui", "positive"],
+      "component": "Conversations",
+      "preconditions": ["页面已加载", "没有选中任何对话"],
+      "inputs": {},
+      "expected": {
+        "button_disabled": true,
+        "button_text": "批量删除 (0)"
+      },
+      "assertions": [
+        "expect(wrapper.find('[data-testid=\"batch-delete-btn\"]').attributes('disabled')).toBeDefined()"
+      ]
+    },
+    {
+      "id": "F-TC002",
+      "name": "test_batch_delete_button_enabled_after_selection",
+      "description": "测试选择对话后批量删除按钮可用",
+      "category": "component",
+      "priority": "P0",
+      "tags": ["batch_delete", "ui", "interaction"],
+      "component": "Conversations",
+      "preconditions": ["页面已加载", "有对话数据"],
+      "inputs": {
+        "selected_count": 2
+      },
+      "actions": [
+        {"type": "click", "target": "el-table-row:first-child .el-checkbox"},
+        {"type": "click", "target": "el-table-row:nth-child(2) .el-checkbox"}
+      ],
+      "expected": {
+        "button_disabled": false,
+        "button_text": "批量删除 (2)",
+        "selected_count": 2
+      },
+      "assertions": [
+        "expect(wrapper.find('[data-testid=\"batch-delete-btn\"]').attributes('disabled')).toBeUndefined()",
+        "expect(wrapper.text()).toContain('批量删除 (2)')"
+      ]
+    },
+    {
+      "id": "F-TC003",
+      "name": "test_batch_delete_confirmation_dialog",
+      "description": "测试批量删除确认对话框",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["batch_delete", "dialog", "positive"],
+      "component": "Conversations",
+      "preconditions": ["已选择2个对话"],
+      "inputs": {
+        "selected_count": 2
+      },
+      "actions": [
+        {"type": "click", "target": "[data-testid='batch-delete-btn']"}
+      ],
+      "expected": {
+        "dialog_shown": true,
+        "dialog_title": "确认批量删除",
+        "dialog_message_contains": "2 个对话"
+      },
+      "assertions": [
+        "expect(ElMessageBox.confirm).toHaveBeenCalled()"
+      ]
+    },
+    {
+      "id": "F-TC004",
+      "name": "test_batch_delete_api_called",
+      "description": "测试批量删除API被正确调用",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["batch_delete", "api", "positive"],
+      "component": "Conversations",
+      "preconditions": ["已选择3个对话"],
+      "inputs": {
+        "selected_ids": ["conv_001", "conv_002", "conv_003"]
+      },
+      "actions": [
+        {"type": "click", "target": "[data-testid='batch-delete-btn']"},
+        {"type": "confirm", "target": "dialog"}
+      ],
+      "expected": {
+        "api_called": true,
+        "api_method": "DELETE",
+        "api_url": "/admin/ai/v1/conversations/batch",
+        "request_body_contains_ids": true
+      },
+      "assertions": [
+        "expect(fetch).toHaveBeenCalledWith('/admin/ai/v1/conversations/batch', expect.objectContaining({ method: 'DELETE' }))"
+      ]
+    },
+    {
+      "id": "F-TC005",
+      "name": "test_batch_delete_success_refresh_list",
+      "description": "测试批量删除成功后刷新列表",
+      "category": "integration",
+      "priority": "P0",
+      "tags": ["batch_delete", "refresh", "positive"],
+      "component": "Conversations",
+      "preconditions": ["已选择2个对话", "API返回成功"],
+      "inputs": {
+        "api_response": {
+          "code": 200,
+          "message": "已删除 2 个对话"
+        }
+      },
+      "expected": {
+        "list_refreshed": true,
+        "success_message_shown": true,
+        "selection_cleared": true
+      },
+      "assertions": [
+        "expect(chatStore.fetchConversations).toHaveBeenCalled()",
+        "expect(ElMessage.success).toHaveBeenCalledWith('已删除 2 个对话')",
+        "expect(selectedConversations.value).toHaveLength(0)"
+      ]
+    },
+    {
+      "id": "F-TC006",
+      "name": "test_batch_select_all_checkbox",
+      "description": "测试全选复选框功能",
+      "category": "component",
+      "priority": "P1",
+      "tags": ["batch_delete", "selection", "positive"],
+      "component": "Conversations",
+      "preconditions": ["页面已加载", "有多条对话"],
+      "actions": [
+        {"type": "click", "target": "el-table-header .el-checkbox"}
+      ],
+      "expected": {
+        "all_selected": true,
+        "selected_count_matches_total": true
+      },
+      "assertions": [
+        "expect(wrapper.findAll('.el-checkbox.is-checked')).toHaveLength(total_count + 1)"
+      ]
+    }
+  ]
+}

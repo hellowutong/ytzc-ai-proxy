@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="`Skill 编辑器: ${skillName}`"
+    :title="`[${skillType}] Skill 编辑器: ${skillName}`"
     fullscreen
     class="skill-editor-dialog"
     :close-on-click-modal="false"
@@ -13,11 +13,6 @@
       <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
           <span>资源管理器</span>
-          <div class="actions">
-            <el-tooltip content="新建文件"><el-button link size="small" @click="openCreateDialog('file')"><el-icon><DocumentAdd /></el-icon></el-button></el-tooltip>
-            <el-tooltip content="新建文件夹"><el-button link size="small" @click="openCreateDialog('folder')"><el-icon><FolderAdd /></el-icon></el-button></el-tooltip>
-            <el-tooltip content="刷新"><el-button link size="small" @click="refreshTree"><el-icon><Refresh /></el-icon></el-button></el-tooltip>
-          </div>
         </div>
         <div class="tree-container">
           <el-tree
@@ -31,7 +26,7 @@
             @node-contextmenu="handleContextMenu"
           >
             <template #default="{ node, data }">
-              <span class="custom-tree-node">
+              <span class="custom-tree-node" :class="{ 'is-disabled': isNodeDisabled(data) }">
                 <el-icon v-if="data.type === 'directory'" class="node-icon"><Folder /></el-icon>
                 <el-icon v-else class="node-icon"><Document /></el-icon>
                 <span class="node-label">{{ node.label }}</span>
@@ -80,7 +75,7 @@
       </div>
 
       <!-- Right: Preview (Conditional) -->
-      <div class="preview-panel" v-if="showPreview && activeFileIsMarkdown" :style="{ width: previewWidth + 'px' }">
+      <div class="preview-panel" v-if="showPreview && activeFileIsMarkdown">
         <div class="panel-header">
           <span>Markdown 预览</span>
           <div class="actions">
@@ -103,10 +98,11 @@
         <div class="right-actions">
            <el-button-group>
              <el-button size="small" @click="handleVersionManage">版本管理</el-button>
+             <el-button size="small" @click="validateCurrentFile" :loading="isValidating" v-if="props.mode === 'edit'">语法检测</el-button>
              <el-button size="small" @click="togglePreview" v-if="activeFileIsMarkdown">
                {{ showPreview ? '关闭预览' : '打开预览' }}
              </el-button>
-             <el-button size="small" type="primary" @click="saveCurrentFile" :disabled="!isCurrentDirty">
+             <el-button size="small" type="primary" @click="saveCurrentFile" :disabled="!isCurrentDirty" v-if="props.mode === 'edit'">
                保存 (Ctrl+S)
              </el-button>
            </el-button-group>
@@ -115,7 +111,7 @@
     </template>
 
     <!-- Context Menus -->
-    <div v-show="contextMenu.visible" class="context-menu" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
+    <div v-show="contextMenu.visible && props.mode === 'edit'" class="context-menu" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
       <div class="menu-item" @click="openCreateDialog('file', contextMenu.node)">新建文件</div>
       <div class="menu-item" @click="openCreateDialog('folder', contextMenu.node)">新建文件夹</div>
       <div class="menu-divider"></div>
@@ -205,6 +201,8 @@ const availableVersions = ref<string[]>([])
 const openFiles = ref<Array<{ path: string, name: string, content: string, is_custom: boolean, isDirty: boolean }>>([])
 const activeFilePath = ref<string>('')
 const isSaving = ref(false)
+const isValidating = ref(false)
+const fileTreeRef = ref()
 
 // 极其重要的隔离：Monaco 对象绝不能进入 Vue 的响应式系统，否则会锁死主线程
 const monacoModels = new Map<string, monaco.editor.ITextModel>()
@@ -227,7 +225,8 @@ const createDialog = reactive({
   visible: false,
   type: 'file' as 'file' | 'folder',
   name: '',
-  parentPath: ''
+  parentPath: '',
+  is_custom: true
 })
 const createInputRef = ref()
 
@@ -237,7 +236,9 @@ const versionDialog = reactive({
 })
 
 // Computed
+const isViewMode = computed(() => props.mode === 'view')
 const skillName = computed(() => props.skill?.name || '')
+const skillType = computed(() => props.skill?.is_system ? "系统默认" : "自定义")
 const activeFile = computed(() => openFiles.value.find(f => f.path === activeFilePath.value))
 const isCurrentDirty = computed(() => activeFile.value?.isDirty || false)
 const activeFileIsMarkdown = computed(() => activeFile.value?.name.toLowerCase().endsWith('.md'))
@@ -252,14 +253,45 @@ const previewContent = computed(() => {
 })
 
 // Watchers
-watch(visible, (val) => {
+watch(visible, async (val) => {
   if (val) {
     currentVersion.value = props.skill?.current_version || 'v1'
     availableVersions.value = props.skill?.all_versions || ['v1']
-    nextTick(() => {
-      refreshTree()
-      initEditor()
-    })
+    await nextTick()
+    await refreshTree()
+    initEditor()
+    
+    // 自动定位并展开当前 Skill 目录
+    if (props.skill) {
+      const targetPath = `${currentVersion.value}/${props.skill.name}`
+      console.log('[SkillEditor] Auto-locating skill path:', targetPath)
+      
+      // 延迟确保树组件已加载数据并渲染
+      setTimeout(() => {
+        if (fileTreeRef.value) {
+          // 1. 展开目标节点及其父节点
+          const node = fileTreeRef.value.getNode(targetPath)
+          if (node) {
+            // 展开当前节点及其所有父节点
+            let curr = node
+            while (curr) {
+              curr.expanded = true
+              curr = curr.parent
+            }
+            
+            // 2. 高亮选中的节点
+            fileTreeRef.value.setCurrentKey(targetPath)
+            
+            // 3. 自动尝试打开 SKILL.md
+            const skillMdPath = `${targetPath}/SKILL.md`
+            const skillMdNode = fileTreeRef.value.getNode(skillMdPath)
+            if (skillMdNode) {
+              openFile(skillMdNode.data)
+            }
+          }
+        }
+      }, 300)
+    }
   } else {
     // Cleanup
     monacoDisposables.forEach(d => d.dispose())
@@ -296,6 +328,7 @@ const initEditor = () => {
     language: 'plaintext',
     theme: 'vs-dark',
     automaticLayout: true,
+    readOnly: props.mode === 'view',
     minimap: { enabled: false },
     fontSize: 14,
     scrollBeyondLastLine: false,
@@ -309,49 +342,52 @@ const initEditor = () => {
 }
 
 const refreshTree = async () => {
-  if (!props.category) return
+  if (!props.category || !props.skill) return
   try {
-    console.log('[SkillEditor] Loading file tree for category:', props.category)
-    
-    // 串行获取 system 和 custom skills，避免并发问题
-    let systemData = null
-    let customData = null
-    
-    try {
-      systemData = await getSkillFiles(props.category, false)
-    } catch (err) {
-      console.error('[SkillEditor] Failed to load system skills:', err)
-    }
-    
-    try {
-      customData = await getSkillFiles(props.category, true)
-    } catch (err) {
-      console.error('[SkillEditor] Failed to load custom skills:', err)
-    }
-    
-    // 合并文件树
-    const mergedFiles: FileNode[] = []
-    if (systemData?.files) mergedFiles.push(...systemData.files)
-    if (customData?.files) {
-      customData.files.forEach((customVersion) => {
-        const existingVersion = mergedFiles.find(f => f.name === customVersion.name && f.type === 'directory')
-        if (existingVersion && existingVersion.children) {
-          existingVersion.children.push(...(customVersion.children || []))
-        } else {
-          mergedFiles.push(customVersion)
+    const isCustom = !props.skill.is_system
+    const data = await getSkillFiles(props.category, isCustom)
+    if (data && data.files) {
+      // 1. 过滤：只保留当前选中的版本目录 (例如只显示 v2)
+      const filtered = data.files.filter(vNode => vNode.name === currentVersion.value)
+      filtered.forEach(vNode => {
+        if (vNode.children) {
+          const skillFolders = vNode.children.filter(sNode => sNode.name === props.skill.name)
+          if (skillFolders.length === 0) {
+            vNode.children = [{
+              name: props.skill.name,
+              type: 'directory',
+              path: `${vNode.name}/${props.skill.name}`,
+              editable: true,
+              is_custom: isCustom,
+              children: []
+            }]
+          } else {
+            vNode.children = skillFolders
+          }
         }
       })
+      fileTree.value = filtered
+    } else {
+      fileTree.value = []
     }
-    fileTree.value = mergedFiles
   } catch (error) {
+    console.error('[SkillEditor] Load tree error:', error)
     ElMessage.error('加载文件树失败')
   }
 }
-
 const handleNodeClick = async (data: FileNode) => {
+  // 在隔离视图下，所有能看到的节点都是可操作的，除非是版本根目录
+  if (data.type === 'directory' && data.path === currentVersion.value) return
   if (data.type === 'file') {
     await openFile(data)
   }
+}
+
+// 检查节点是否禁用
+const isNodeDisabled = (data: FileNode) => {
+  if (!props.skill) return true
+  // 版本根目录不允许右键菜单操作（如重命名版本），只允许在其下的 Skill 目录操作
+  return data.path === currentVersion.value
 }
 
 const openFile = async (node: FileNode) => {
@@ -375,11 +411,9 @@ const openFile = async (node: FileNode) => {
     else if (node.name.endsWith('.py')) language = 'python'
     else if (node.name.endsWith('.json')) language = 'json'
 
-    // 1. 创建 Model 并使用 markRaw 强制标记为非响应式
-    const uri = monaco.Uri.parse('file:///' + node.path.replace(/\\/g, '/'))
+    const uri = monaco.Uri.parse('file:///' + node.path)
     const model = markRaw(monaco.editor.createModel(res.content || '', language, uri))
     
-    // 2. 创建监听器并使用 markRaw
     const path = node.path
     const disposable = markRaw(model.onDidChangeContent(() => {
       const file = openFiles.value.find(f => f.path === path)
@@ -389,11 +423,9 @@ const openFile = async (node: FileNode) => {
       }
     }))
 
-    // 3. 存储到 Map
     monacoModels.set(path, model)
     monacoDisposables.set(path, disposable)
 
-    // 4. 将元数据存入 Vue 数组
     openFiles.value.push({
       path: path,
       name: node.name,
@@ -402,7 +434,6 @@ const openFile = async (node: FileNode) => {
       isDirty: false
     })
     
-    // 5. 使用 nextTick 延迟切换，确保 DOM 已就绪
     nextTick(() => {
       activeFilePath.value = path
     })
@@ -417,8 +448,6 @@ const closeFile = (path: string) => {
   if (index === -1) return
   
   const file = openFiles.value[index]
-  
-  // Cleanup Monaco resources from Map
   const model = monacoModels.get(path)
   const disposable = monacoDisposables.get(path)
   if (disposable) disposable.dispose()
@@ -475,7 +504,33 @@ const togglePreview = () => {
   showPreview.value = !showPreview.value
 }
 
+const validateCurrentFile = async () => {
+  if (!activeFile.value) return
+  isValidating.value = true
+  try {
+    const res = await validateFile(activeFile.value.path, activeFile.value.content)
+    if (res.valid) {
+      if (res.warnings.length > 0) {
+        ElMessage.warning({
+          message: `校验通过，但有 ${res.warnings.length} 个建议`,
+          duration: 5000
+        })
+      } else {
+        ElMessage.success("校验通过")
+      }
+    } else {
+      const firstError = res.errors[0]
+      ElMessage.error(`校验失败: ${firstError.message} (行 ${firstError.line})`)
+    }
+  } catch (error) {
+    ElMessage.error("校验请求失败")
+  } finally {
+    isValidating.value = false
+  }
+}
+
 const handleContextMenu = (event: MouseEvent, data: FileNode) => {
+  if (isNodeDisabled(data) || props.mode === 'view') return
   event.preventDefault()
   contextMenu.visible = true
   contextMenu.top = event.clientY
@@ -497,8 +552,10 @@ const openCreateDialog = (type: 'file' | 'folder', node?: FileNode) => {
   createDialog.name = ''
   if (node) {
     createDialog.parentPath = node.type === 'directory' ? node.path : node.path.split('/').slice(0, -1).join('/')
+    createDialog.is_custom = node.is_custom !== undefined ? node.is_custom : !props.skill?.is_system
   } else {
     createDialog.parentPath = ''
+    createDialog.is_custom = !props.skill?.is_system
   }
   nextTick(() => {
     createInputRef.value?.focus()
@@ -508,7 +565,7 @@ const openCreateDialog = (type: 'file' | 'folder', node?: FileNode) => {
 const confirmCreate = async () => {
   if (!createDialog.name) return
   try {
-    const isCustom = !props.skill?.is_system
+    const isCustom = createDialog.is_custom
     if (createDialog.type === "file") {
       await createFile({
         category: props.category,
@@ -540,7 +597,7 @@ const handleRename = (node: FileNode) => {
   }).then(async ({ value }) => {
     if (!value || value === node.name) return
     try {
-      const isCustom = !props.skill?.is_system
+      const isCustom = node.is_custom !== undefined ? node.is_custom : !props.skill?.is_system
       await renameItem({
         category: props.category,
         old_path: node.path,
@@ -559,7 +616,7 @@ const handleDelete = (node: FileNode) => {
     type: 'warning'
   }).then(async () => {
     try {
-      const isCustom = !props.skill?.is_system
+      const isCustom = node.is_custom !== undefined ? node.is_custom : !props.skill?.is_system
       await deleteFile(props.category, node.path, isCustom)
       closeFile(node.path)
       refreshTree()
@@ -606,15 +663,15 @@ const deleteVersion = async (ver: string) => {
 <style scoped>
 .skill-editor-dialog :deep(.el-dialog__body) {
   padding: 0;
-  height: calc(100vh - 54px - 60px);
+  height: 70vh;
   display: flex;
   flex-direction: column;
   background: #1e1e1e;
 }
 .editor-layout {
+  height: calc(70vh - 60px);
   display: flex;
   flex: 1;
-  height: 100%;
   overflow: hidden;
 }
 .sidebar {
@@ -625,7 +682,7 @@ const deleteVersion = async (ver: string) => {
 }
 .sidebar-header {
   padding: 10px 16px;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: bold;
   color: #bbb;
   display: flex;
@@ -640,16 +697,21 @@ const deleteVersion = async (ver: string) => {
 .custom-tree-node {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 18px;
   font-size: 13px;
   width: 100%;
+}
+.custom-tree-node.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none; /* 防止点击，但由于 handledNodeClick 也有拦截，这层是双保险 */
 }
 .node-icon {
   color: #c5c5c5;
 }
 .dirty-dot {
   margin-left: auto;
-  font-size: 16px;
+  font-size: 48px;
   line-height: 1;
   color: #e6a23c;
 }
@@ -728,8 +790,8 @@ const deleteVersion = async (ver: string) => {
   position: relative;
 }
 .monaco-container {
+  min-height: 800px;
   width: 100%;
-  height: 100%;
 }
 .empty-editor {
   flex: 1;
@@ -746,11 +808,12 @@ const deleteVersion = async (ver: string) => {
   color: #333;
 }
 .sub-text {
-  font-size: 12px;
+  font-size: 18px;
   color: #444;
   margin-top: 8px;
 }
 .preview-panel {
+  flex: 1;
   background: #1e1e1e;
   border-left: 1px solid #333;
   display: flex;
@@ -764,7 +827,7 @@ const deleteVersion = async (ver: string) => {
   justify-content: space-between;
   background: #252526;
   color: #bbb;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: bold;
 }
 .preview-content {
@@ -774,13 +837,13 @@ const deleteVersion = async (ver: string) => {
   color: #ccc;
 }
 .status-bar {
-  height: 24px;
+  height: 60px;
   background: #007acc;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 36px;
   font-size: 12px;
 }
 .skill-editor-dialog :deep(.el-dialog__footer) {
@@ -789,23 +852,43 @@ const deleteVersion = async (ver: string) => {
 .left-status {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
 }
 .version-tag {
-  height: 18px;
-  line-height: 16px;
+  height: 40px;
+  padding: 0 16px;
   border: none;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.15);
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+.version-tag:hover {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-2px);
+}
+.version-tag :deep(.el-tag__content) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.version-tag :deep(.el-icon) {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
 }
 .right-actions {
   display: flex;
   align-items: center;
 }
 .right-actions .el-button {
-  padding: 2px 8px;
-  height: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  height: 30px;
+  font-size: 15px;
   background: transparent;
   border: none;
   color: #fff;
@@ -842,7 +925,7 @@ const deleteVersion = async (ver: string) => {
 }
 .markdown-body {
   font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.6;
 }
 .markdown-body :deep(h1), .markdown-body :deep(h2) {
