@@ -202,7 +202,7 @@ Authorization: Bearer {proxy_key}
     "total": 10,
     "active": 8
   },
-  "timestamp": "2026-02-09T14:30:00Z"
+  "timestamp": "2026-02-24T14:30:00Z"
 }
 ```
 
@@ -218,17 +218,17 @@ Authorization: Bearer {proxy_key}
     "mongodb": {
       "status": "healthy",
       "latency_ms": 5,
-      "last_check": "2026-02-09T14:30:00Z"
+      "last_check": "2026-02-24T14:30:00Z"
     },
     "redis": {
       "status": "healthy",
       "latency_ms": 2,
-      "last_check": "2026-02-09T14:30:00Z"
+      "last_check": "2026-02-24T14:30:00Z"
     },
     "qdrant": {
       "status": "healthy",
       "latency_ms": 8,
-      "last_check": "2026-02-09T14:30:00Z"
+      "last_check": "2026-02-24T14:30:00Z"
     }
   }
 }
@@ -248,7 +248,7 @@ Authorization: Bearer {proxy_key}
   "activities": [
     {
       "id": "act_001",
-      "timestamp": "2026-02-09T14:25:00Z",
+      "timestamp": "2026-02-24T14:25:00Z",
       "type": "config",
       "action": "更新虚拟模型配置",
       "details": {"model_name": "demo1"},
@@ -256,7 +256,7 @@ Authorization: Bearer {proxy_key}
     },
     {
       "id": "act_002",
-      "timestamp": "2026-02-09T14:20:00Z",
+      "timestamp": "2026-02-24T14:20:00Z",
       "type": "skill",
       "action": "重载Skill",
       "details": {"skill_category": "router"},
@@ -280,7 +280,7 @@ Authorization: Bearer {proxy_key}
 {
   "config": "完整的config.yml内容字符串",
   "format": "yaml",
-  "last_modified": "2026-02-09T10:00:00Z",
+  "last_modified": "2026-02-24T10:00:00Z",
   "is_valid": true
 }
 ```
@@ -302,7 +302,7 @@ Authorization: Bearer {proxy_key}
   "success": true,
   "message": "配置已更新并重载",
   "validation_errors": [],
-  "timestamp": "2026-02-09T14:30:00Z"
+  "timestamp": "2026-02-24T14:30:00Z"
 }
 ```
 
@@ -326,7 +326,7 @@ Authorization: Bearer {proxy_key}
 {
   "success": true,
   "message": "配置已重载",
-  "timestamp": "2026-02-09T14:30:00Z"
+  "timestamp": "2026-02-24T14:30:00Z"
 }
 ```
 
@@ -1274,7 +1274,7 @@ Authorization: Bearer {proxy_key}
 {
   "logs": [
     {
-      "timestamp": "2026-02-09T14:30:00Z",
+      "timestamp": "2026-02-24T14:30:00Z",
       "skill_category": "router",
       "skill_name": "意图识别",
       "skill_version": "v1",
@@ -1658,7 +1658,7 @@ Authorization: Bearer {proxy_key}
       "id": "conv_001",
       "model": "demo1",
       "message_count": 10,
-      "last_message_time": "2026-02-09T14:30:00Z",
+      "last_message_time": "2026-02-24T14:30:00Z",
       "preview": "用户: 你好\nAI: 你好！..."
     }
   ],
@@ -1677,19 +1677,19 @@ Authorization: Bearer {proxy_key}
 {
   "id": "conv_001",
   "model": "demo1",
-  "created_at": "2026-02-09T14:00:00Z",
-  "updated_at": "2026-02-09T14:30:00Z",
+  "created_at": "2026-02-24T14:00:00Z",
+  "updated_at": "2026-02-24T14:30:00Z",
   "messages": [
     {
       "role": "user",
       "content": "你好",
-      "timestamp": "2026-02-09T14:00:05Z",
+      "timestamp": "2026-02-24T14:00:05Z",
       "metadata": {}
     },
     {
       "role": "assistant",
       "content": "你好！我是AI助手。",
-      "timestamp": "2026-02-09T14:00:08Z",
+      "timestamp": "2026-02-24T14:00:08Z",
       "metadata": {
         "model_used": "small",
         "knowledge_references": [...],
@@ -1813,7 +1813,7 @@ Content-Type: application/json
       "is_shared": true,
       "vectorized": true,
       "chunk_count": 5,
-      "upload_time": "2026-02-09T10:00:00Z",
+      "upload_time": "2026-02-24T10:00:00Z",
       "size_bytes": 1024000
     }
   ],
@@ -2008,10 +2008,10 @@ language: "zh"
         "model": "base",
         "language": "zh",
         "text_length": 1500,
-        "completed_at": "2026-02-09T14:30:00Z"
+        "completed_at": "2026-02-24T14:30:00Z"
       },
       "progress": 100,
-      "upload_time": "2026-02-09T14:00:00Z"
+      "upload_time": "2026-02-24T14:00:00Z"
     }
   ],
   "total": 50
@@ -2134,7 +2134,7 @@ auto_transcribe: "true"
       "default_permanent": false,
       "virtual_model": "demo1",
       "article_count": 150,
-      "last_fetch_time": "2026-02-09T14:00:00Z",
+      "last_fetch_time": "2026-02-24T14:00:00Z",
       "created_at": "2026-01-01T00:00:00Z"
     }
   ],
@@ -2217,8 +2217,8 @@ file: [OPML文件]
       "url": "https://news.ai.com/article/1",
       "content": "完整的文章内容...",  # 爬取的完整内容
       "summary": "摘要...",
-      "published_at": "2026-02-09T10:00:00Z",
-      "fetched_at": "2026-02-09T14:00:00Z",
+      "published_at": "2026-02-24T10:00:00Z",
+      "fetched_at": "2026-02-24T14:00:00Z",
       "is_read": false,
       "knowledge_extracted": true,
       "fetch_status": "full_content"  # full_content/summary_only/failed
@@ -2240,7 +2240,7 @@ file: [OPML文件]
   "url": "https://news.ai.com/article/1",
   "content": "完整的HTML/Markdown内容",
   "content_format": "markdown",  # html/markdown/plain
-  "published_at": "2026-02-09T10:00:00Z",
+  "published_at": "2026-02-24T10:00:00Z",
   "knowledge_references": [...]
 }
 ```
@@ -2296,7 +2296,7 @@ file: [OPML文件]
 {
   "logs": [
     {
-      "timestamp": "2026-02-09T14:30:00Z",
+      "timestamp": "2026-02-24T14:30:00Z",
       "level": "INFO",
       "module": "skill.executor",
       "message": "Skill执行成功: router/意图识别",
@@ -2324,7 +2324,7 @@ file: [OPML文件]
   "logs": [
     {
       "id": "op_001",
-      "timestamp": "2026-02-09T14:30:00Z",
+      "timestamp": "2026-02-24T14:30:00Z",
       "type": "config",
       "action": "更新虚拟模型配置",
       "details": {"model_name": "demo1"},
@@ -2358,7 +2358,7 @@ file: [OPML文件]
   "logs": [
     {
       "log_id": "skill_001",
-      "timestamp": "2026-02-09T14:30:00Z",
+      "timestamp": "2026-02-24T14:30:00Z",
       "skill_category": "router",
       "skill_name": "意图识别",
       "skill_version": "v1",
@@ -2421,21 +2421,21 @@ file: [OPML文件]
 {
   "records": [
     {
-      "timestamp": "2026-02-09T14:30:00Z",
+      "timestamp": "2026-02-24T14:30:00Z",
       "type": "user_input",
       "conversation_id": "conv_001",
       "model": "demo1",
       "data": {"content": "你好", "metadata": {...}}
     },
     {
-      "timestamp": "2026-02-09T14:30:05Z",
+      "timestamp": "2026-02-24T14:30:05Z",
       "type": "ai_response",
       "conversation_id": "conv_001",
       "model": "demo1",
       "data": {"content": "你好！", "model_used": "small", "knowledge_refs": [...]}
     },
     {
-      "timestamp": "2026-02-09T14:30:05Z",
+      "timestamp": "2026-02-24T14:30:05Z",
       "type": "routing_decision",
       "conversation_id": "conv_001",
       "data": {"from": "small", "to": "big", "reason": "复杂问题"}
@@ -2467,7 +2467,7 @@ file: [OPML文件]
         "chunks": [...],
         "stored_in_qdrant": true
       },
-      "created_at": "2026-02-09T14:00:00Z"
+      "created_at": "2026-02-24T14:00:00Z"
     }
   ]
 }
@@ -2492,7 +2492,7 @@ file: [OPML文件]
       "content_format": "html",
       "knowledge_extraction": {...},
       "fetch_metadata": {
-        "fetch_time": "2026-02-09T14:00:00Z",
+        "fetch_time": "2026-02-24T14:00:00Z",
         "fetch_method": "readability",
         "success": true
       }
@@ -2509,7 +2509,7 @@ file: [OPML文件]
 
 - **Content-Type**: `application/json` (除文件上传)
 - **编码**: UTF-8
-- **时间格式**: ISO 8601 (如 `2026-02-09T14:30:00Z`)
+- **时间格式**: ISO 8601 (如 `2026-02-24T14:30:00Z`)
 
 ### 3.2 响应格式
 
@@ -2582,5 +2582,5 @@ file: [OPML文件]
 ---
 
 **文档版本**: 1.0  
-**最后更新**: 2026-02-09  
+**最后更新**: 2026-02-24  
 **状态**: 已完成，待开发实现

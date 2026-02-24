@@ -3,7 +3,7 @@
 **项目名称**: ytzc-ai-proxy (AI网关系统)  
 **技术栈**: Python 3.11 + FastAPI  
 **文档版本**: 1.0  
-**最后更新**: 2026-02-09
+**最后更新**: 2026-02-24
 
 ---
 
@@ -2150,13 +2150,13 @@ class RSSFetcher:
     {
       "role": "user",
       "content": "你好",
-      "timestamp": ISODate("2026-02-09T14:00:00Z"),
+      "timestamp": ISODate("2026-02-24T14:00:00Z"),
       "metadata": {}
     },
     {
       "role": "assistant", 
       "content": "你好！",
-      "timestamp": ISODate("2026-02-09T14:00:05Z"),
+      "timestamp": ISODate("2026-02-24T14:00:05Z"),
       "metadata": {
         "model_used": "small",
         "knowledge_references": [...],
@@ -2165,8 +2165,8 @@ class RSSFetcher:
     }
   ],
   "message_count": 10,
-  "created_at": ISODate("2026-02-09T14:00:00Z"),
-  "updated_at": ISODate("2026-02-09T14:30:00Z"),
+  "created_at": ISODate("2026-02-24T14:00:00Z"),
+  "updated_at": ISODate("2026-02-24T14:30:00Z"),
   "has_knowledge_reference": true
 }
 
@@ -2190,7 +2190,7 @@ class RSSFetcher:
   "chunk_count": 5,
   "file_path": "./upload/textfile/xxx.pdf",
   "file_size": 1024000,
-  "upload_time": ISODate("2026-02-09T10:00:00Z"),
+  "upload_time": ISODate("2026-02-24T10:00:00Z"),
   "chunks": [
     {
       "index": 0,
@@ -2222,12 +2222,12 @@ class RSSFetcher:
     "language": "zh",
     "text": "完整转录文本...",
     "segments": [...],
-    "completed_at": ISODate("2026-02-09T14:30:00Z")
+    "completed_at": ISODate("2026-02-24T14:30:00Z")
   },
   "knowledge_extracted": true,
   "knowledge_doc_ids": ["doc_uuid_1", "doc_uuid_2"],
-  "upload_time": ISODate("2026-02-09T14:00:00Z"),
-  "updated_at": ISODate("2026-02-09T14:30:00Z")
+  "upload_time": ISODate("2026-02-24T14:00:00Z"),
+  "updated_at": ISODate("2026-02-24T14:30:00Z")
 }
 
 // 索引
@@ -2247,7 +2247,7 @@ class RSSFetcher:
   "default_permanent": false,
   "virtual_model": "demo1",
   "article_count": 150,
-  "last_fetch_time": ISODate("2026-02-09T14:00:00Z"),
+  "last_fetch_time": ISODate("2026-02-24T14:00:00Z"),
   "created_at": ISODate("2026-01-01T00:00:00Z")
 }
 ```
@@ -2262,8 +2262,8 @@ class RSSFetcher:
   "content": "完整的文章内容...",
   "raw_content": "原始HTML...",
   "content_format": "markdown",
-  "published_at": ISODate("2026-02-09T10:00:00Z"),
-  "fetched_at": ISODate("2026-02-09T14:00:00Z"),
+  "published_at": ISODate("2026-02-24T10:00:00Z"),
+  "fetched_at": ISODate("2026-02-24T14:00:00Z"),
   "is_read": false,
   "knowledge_extracted": true,
   "knowledge_doc_ids": [...],
@@ -2280,7 +2280,7 @@ class RSSFetcher:
 ```javascript
 {
   "_id": "log_uuid",
-  "timestamp": ISODate("2026-02-09T14:30:00Z"),
+  "timestamp": ISODate("2026-02-24T14:30:00Z"),
   "type": "config",  // config/skill/model/media/rss
   "action": "更新虚拟模型配置",
   "details": {
@@ -2315,7 +2315,7 @@ class RSSFetcher:
   "virtual_model": "demo1",
   "is_shared": true,
   "source": "upload",
-  "created_at": "2026-02-09T10:00:00Z",
+  "created_at": "2026-02-24T10:00:00Z",
   "text_preview": "内容前100字..."
 }
 ```
@@ -2681,13 +2681,13 @@ async def ai_gateway_exception_handler(request, exc):
 
 **系统日志** (结构化):
 ```
-2026-02-09 14:30:00 [INFO] skill.manager: Skill加载成功: router/意图识别@v1
-2026-02-09 14:30:05 [ERROR] skill.executor: Skill执行失败: router/意图识别 - Connection timeout
+2026-02-24 14:30:00 [INFO] skill.manager: Skill加载成功: router/意图识别@v1
+2026-02-24 14:30:05 [ERROR] skill.executor: Skill执行失败: router/意图识别 - Connection timeout
 ```
 
 **执行日志** (JSON Lines):
 ```json
-{"timestamp":"2026-02-09T14:30:00Z","skill_category":"router","skill_name":"意图识别","duration_ms":120,"status":"success"}
+{"timestamp":"2026-02-24T14:30:00Z","skill_category":"router","skill_name":"意图识别","duration_ms":120,"status":"success"}
 ```
 
 ---
@@ -2722,7 +2722,7 @@ async def ai_gateway_exception_handler(request, exc):
   "test_suite": "skill_manager",
   "description": "Skill管理器测试套件",
   "author": "developer",
-  "created_at": "2026-02-09",
+  "created_at": "2026-02-24",
   "test_cases": [
     {
       "id": "TC001",
@@ -3673,4 +3673,4 @@ httpx==0.26.0
 | 版本 | 日期 | 更新内容 | 作者 |
 |------|------|----------|------|
 | 1.1 | 2026-02-14 | 新增第11章：可扩展路由架构设计 | AI Assistant |
-| 1.0 | 2026-02-09 | 初始版本 | 开发团队 |
+| 1.0 | 2026-02-24 | 初始版本 | 开发团队 |
