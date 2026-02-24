@@ -3,6 +3,7 @@ RSS抓取器 - RSS订阅管理、抓取、内容提取
 """
 
 import uuid
+import os
 import feedparser
 import httpx
 from datetime import datetime
@@ -14,6 +15,22 @@ import html2text
 
 class RSSFetcher:
     """RSS抓取器类"""
+    
+    # RSSHub 服务地址列表（按优先级排序，已测试可用）
+    # 优先使用稳定的公共实例
+    RSS_HUB_URLS = [
+        "http://rsshub:1200",  # 私有实例（需自行部署）
+        "https://rsshub.rssforever.com",  # 公共实例 - 阿联酋
+        "https://rsshub.ktachibana.party",  # 公共实例 - 美国
+        "https://rsshub.rss.tips",  # 公共实例 - 美国
+        "https://rss.owo.nz",  # 公共实例 - 德国
+        "https://rsshub.henry.wang",  # 公共实例 - 英国
+        "https://rsshub.app",  # 官方实例（Cloudflare保护）
+    ]
+    
+    # 兼容旧配置
+    RSS_HUB_URL = os.environ.get("RSS_HUB_URL", "http://rsshub:1200")
+    RSS_HUB_PUBLIC = "rsshub.app"
     
     def __init__(
         self,
@@ -51,6 +68,73 @@ class RSSFetcher:
             )
         return self._http_client
     
+    def _is_rsshub_url(self, url: str) -> bool:
+        """检查是否是RSSHub URL"""
+        for rsshub_base in RSSFetcher.RSS_HUB_URLS:
+            base = rsshub_base.replace("http://", "").replace("https://", "")
+            if base in url:
+                return True
+        return False
+    
+    async def _fetch_rss_with_fallback(self, url: str) -> Any:
+        """
+        尝试从多个RSSHub实例获取内容
+        
+        Args:
+            url: RSS URL（可能是rsshub://或http(s)://）
+            
+        Returns:
+            feedparser解析结果
+        """
+        client = await self._get_http_client()
+        
+        # 提取RSSHub路径
+        if url.startswith("rsshub://"):
+            path = url.replace("rsshub://", "")
+            urls_to_try = [base + "/" + path for base in RSSFetcher.RSS_HUB_URLS]
+        else:
+            # 对于完整URL，提取路径并尝试所有实例
+            # 找出URL中的RSSHub路径
+            path = None
+            for base in RSSFetcher.RSS_HUB_URLS:
+                base_domain = base.replace("http://", "").replace("https://", "")
+                if base_domain in url:
+                    # 提取路径部分
+                    path = url.split(base_domain, 1)[-1]
+                    break
+            
+            if path:
+                # 尝试所有实例
+                urls_to_try = [base + path for base in RSSFetcher.RSS_HUB_URLS]
+            else:
+                # 非RSSHub URL，直接使用
+                urls_to_try = [url]
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://rsshub.app/"
+        }
+        
+        last_error = None
+        for attempt_url in urls_to_try:
+            try:
+                response = await client.get(attempt_url, headers=headers, follow_redirects=True, timeout=30.0)
+                response.raise_for_status()
+                feed = feedparser.parse(response.text)
+                if feed.entries:
+                    return feed
+                # 如果没有entries，记录一下但继续尝试下一个
+                print(f"[RSSHub] {attempt_url} 返回空内容，尝试下一个...")
+            except Exception as e:
+                print(f"[RSSHub] {attempt_url} 失败: {e}")
+                last_error = e
+                continue
+        
+        raise RuntimeError(f"所有RSSHub实例均获取失败: {last_error}")
+    
     async def fetch_feed(self, subscription_id: str) -> Dict[str, Any]:
         """
         抓取单个RSS订阅
@@ -76,10 +160,28 @@ class RSSFetcher:
             }
         
         # 解析RSS feed
+        subscription_url = subscription["url"]
+        is_rsshub = self._is_rsshub_url(subscription_url) or subscription_url.startswith("rsshub://")
+        
         try:
-            feed = feedparser.parse(subscription["url"])
+            if is_rsshub:
+                # 使用fallback机制获取RSSHub内容
+                feed = await self._fetch_rss_with_fallback(subscription_url)
+            else:
+                feed = feedparser.parse(subscription_url)
         except Exception as e:
-            raise RuntimeError(f"解析RSS失败: {e}")
+            raise RuntimeError(f"获取RSS失败: {e}")
+        
+        # 检查是否获取到文章
+        if not feed.entries:
+            return {
+                "subscription_id": subscription_id,
+                "subscription_name": subscription.get("name"),
+                "articles_fetched": 0,
+                "articles_skipped": 0,
+                "feed_title": subscription.get("name", ""),
+                "message": "未获取到任何文章，可能是RSS源为空或URL无效"
+            }
         
         articles_fetched = 0
         articles_skipped = 0
@@ -97,8 +199,58 @@ class RSSFetcher:
                 continue
             
             try:
-                # 访问原文链接，爬取完整内容
-                article_content = await self._fetch_full_content(entry.link)
+                # 检查是否是微信文章，微信文章直接使用RSS内容避免被反爬虫
+                is_wechat = "mp.weixin.qq.com" in entry.link
+                
+                if is_wechat:
+                    # 微信文章：直接使用RSS提供的完整内容
+                    # feedparser将 content_encoded 解析为 content 列表
+                    content_list = entry.get("content")
+                    if content_list and isinstance(content_list, list):
+                        rss_content = content_list[0].get("value", "")
+                    else:
+                        rss_content = entry.get("description", "")
+                    
+                    if rss_content and len(rss_content) > 100:
+                        import re
+                        text = re.sub(r'<br\s*/?>', '\n', rss_content)
+                        text = re.sub(r'<[^>]+>', '', text)
+                        text = text.strip()
+                        article_content = {
+                            "raw": rss_content,
+                            "cleaned": rss_content,
+                            "markdown": text,
+                            "title": entry.get("title", ""),
+                            "status": "rss_summary"
+                        }
+                    else:
+                        article_content = await self._fetch_full_content(entry.link)
+                else:
+                    # 普通文章：尝试爬取完整内容
+                    article_content = await self._fetch_full_content(entry.link)
+                    
+                    # 如果获取失败，使用RSS摘要作为后备
+                    content_status = article_content.get("status")
+                    content_length = len(article_content.get("cleaned", ""))
+                    
+                    if content_status in ["blocked", "failed"] or content_length < 200:
+                        rss_content = (
+                            entry.get("content_encoded") or 
+                            entry.get("description") or 
+                            ""
+                        )
+                        if rss_content and len(rss_content) > 100:
+                            import re
+                            text = re.sub(r'<br\s*/?>', '\n', rss_content)
+                            text = re.sub(r'<[^>]+>', '', text)
+                            text = text.strip()
+                            article_content = {
+                                "raw": rss_content,
+                                "cleaned": rss_content,
+                                "markdown": text,
+                                "title": entry.get("title", ""),
+                                "status": "rss_summary"
+                            }
                 
                 # 解析发布时间
                 published_at = self._parse_date(entry.get("published", ""))
@@ -156,7 +308,7 @@ class RSSFetcher:
             "subscription_name": subscription.get("name"),
             "articles_fetched": articles_fetched,
             "articles_skipped": articles_skipped,
-            "feed_title": feed.feed.get("title", "") if "rsshub.app" not in url else name,
+            "feed_title": feed.feed.get("title", "") if is_rsshub else subscription.get("name"),
             "fetch_time": datetime.utcnow()
         }
     
@@ -172,16 +324,55 @@ class RSSFetcher:
         """
         client = await self._get_http_client()
         
+        # 检测是否是微信文章
+        is_wechat = "mp.weixin.qq.com" in url
+        
+        # 根据网站类型设置不同的请求头
+        headers = {}
+        if is_wechat:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://mp.weixin.qq.com/",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            }
+        
         try:
             # 发送HTTP请求获取HTML
-            response = await client.get(url)
+            if headers:
+                response = await client.get(url, headers=headers)
+            else:
+                response = await client.get(url)
             response.raise_for_status()
             raw_html = response.text
+            
+            # 检查是否被反爬虫阻止
+            if is_wechat:
+                # 微信文章特殊处理
+                if "var msgTs =" in raw_html or "id=" in raw_html and len(raw_html) < 5000:
+                    # 内容被简化，可能需要从RSS摘要获取
+                    return {
+                        "raw": raw_html,
+                        "cleaned": "<p>微信文章内容无法获取（反爬虫保护）</p>",
+                        "markdown": "微信文章内容无法获取（反爬虫保护）\n\n可能原因：\n1. 微信反爬虫机制\n2. 需要登录微信\n3. 文章已删除或不可见",
+                        "title": "",
+                        "status": "blocked"
+                    }
             
             # 使用readability-lxml提取正文
             doc = Document(raw_html)
             cleaned_content = doc.summary()
             title = doc.short_title()
+            
+            # 检查是否成功提取内容
+            if not cleaned_content or len(cleaned_content) < 100:
+                return {
+                    "raw": raw_html,
+                    "cleaned": "<p>无法提取文章内容</p>",
+                    "markdown": "无法提取文章内容",
+                    "title": title,
+                    "status": "failed"
+                }
             
             # 转换为Markdown
             markdown_content = html2text.html2text(cleaned_content)
@@ -281,17 +472,17 @@ class RSSFetcher:
         Returns:
             订阅信息字典
         """
-        # 转换 RSSHub URL
-        if url.startswith("rsshub://"):
-            url = url.replace("rsshub://", "https://rsshub.app/")
+        # 转换 RSSHub URL - 保留rsshub://协议，在抓取时自动转换
+        # 用户可以输入 rsshub://xueqiu/hots 或完整的 https://rsshub.app/... 格式
+        is_rsshub_url = url.startswith("rsshub://")
         
         # 验证URL格式
-        if not url.startswith(("http://", "https://")):
-            raise ValueError("URL必须以http://或https://开头")
+        if not url.startswith(("http://", "https://", "rsshub://")):
+            raise ValueError("URL必须以http://、https://或rsshub://开头")
         
         # 对非RSSHub URL进行严格验证
-        # RSSHub URL经常被Cloudflare保护，无法直接验证
-        if "rsshub.app" not in url:
+        # RSSHub URL会使用fallback机制获取，跳过验证
+        if not is_rsshub_url and "rsshub" not in url:
             try:
                 feed = feedparser.parse(url)
                 if not feed.entries:
@@ -320,10 +511,13 @@ class RSSFetcher:
         
         
         # 获取feed标题
-        if "rsshub.app" in url:
+        if is_rsshub_url:
             feed_title = name
         else:
-            feed_title = feed.feed.get("title", name)
+            try:
+                feed_title = feed.feed.get("title", name) if 'feed' in locals() else name
+            except:
+                feed_title = name
         
         return {
             "id": subscription_id,
@@ -487,6 +681,7 @@ class RSSFetcher:
                 "subscription_id": doc["subscription_id"],
                 "title": doc["title"],
                 "url": doc["url"],
+                "content": doc.get("content", ""),
                 "is_read": doc.get("is_read", False),
                 "knowledge_extracted": doc.get("knowledge_extracted", False),
                 "published_at": doc.get("published_at"),

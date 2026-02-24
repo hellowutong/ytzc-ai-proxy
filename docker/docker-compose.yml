@@ -160,6 +160,29 @@ services:
       timeout: 10s
       retries: 3
 
+  # RSSHub - 私有RSSHub实例
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: ai-gateway-rsshub
+    restart: unless-stopped
+    ports:
+      - "1200:1200"
+    environment:
+      - PORT=1200
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - POOL_SIZE=10
+      - RSSHUB_REQUEST_TIMEOUT=10000
+      - RSSHUB_MAX_CACHE_SIZE=100
+      - RSSHUB_LISTEN=0.0.0.0:1200
+    networks:
+      - ai-gateway-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:1200/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   mongo_data:
     driver: local
