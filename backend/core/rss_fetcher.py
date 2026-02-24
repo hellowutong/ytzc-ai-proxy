@@ -156,7 +156,7 @@ class RSSFetcher:
             "subscription_name": subscription.get("name"),
             "articles_fetched": articles_fetched,
             "articles_skipped": articles_skipped,
-            "feed_title": feed.feed.get("title", ""),
+            "feed_title": feed.feed.get("title", "") if "rsshub.app" not in url else name,
             "fetch_time": datetime.utcnow()
         }
     
@@ -281,13 +281,23 @@ class RSSFetcher:
         Returns:
             订阅信息字典
         """
-        # 验证URL
-        try:
-            feed = feedparser.parse(url)
-            if not feed.entries:
-                raise ValueError("无效的RSS URL或无法解析")
-        except Exception as e:
-            raise ValueError(f"验证RSS URL失败: {e}")
+        # 转换 RSSHub URL
+        if url.startswith("rsshub://"):
+            url = url.replace("rsshub://", "https://rsshub.app/")
+        
+        # 验证URL格式
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("URL必须以http://或https://开头")
+        
+        # 对非RSSHub URL进行严格验证
+        # RSSHub URL经常被Cloudflare保护，无法直接验证
+        if "rsshub.app" not in url:
+            try:
+                feed = feedparser.parse(url)
+                if not feed.entries:
+                    raise ValueError("无效的RSS URL或无法解析")
+            except Exception as e:
+                raise ValueError(f"验证RSS URL失败: {e}")
         
         subscription_id = str(uuid.uuid4())
         subscription = {
@@ -308,12 +318,19 @@ class RSSFetcher:
         
         await self._subscriptions_collection.insert_one(subscription)
         
+        
+        # 获取feed标题
+        if "rsshub.app" in url:
+            feed_title = name
+        else:
+            feed_title = feed.feed.get("title", name)
+        
         return {
             "id": subscription_id,
             "name": name,
             "url": url,
             "enabled": True,
-            "feed_title": feed.feed.get("title", ""),
+            "feed_title": feed_title,
             "created_at": subscription["created_at"]
         }
     

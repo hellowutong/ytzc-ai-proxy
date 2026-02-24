@@ -2054,85 +2054,259 @@ class MediaProcessor:
 
 ### 3.7 RSS抓取器 (RSSFetcher)
 
-**职责**: RSS订阅管理、抓取、内容提取、知识提取
+**职责**: RSS订阅管理、抓取、内容提取、使用MongoDB存储
 
 **类设计**:
 ```python
 class RSSFetcher:
     _mongodb: AsyncIOMotorClient
-    _knowledge_manager: KnowledgeManager
     _http_client: httpx.AsyncClient
+    _config: Dict[str, Any]
     
-    def __init__(self, mongodb, knowledge_manager):
+    def __init__(self, mongodb, config: Dict[str, Any] = None):
         self._mongodb = mongodb
-        self._knowledge_manager = knowledge_manager
+        self._config = config or {}
         self._http_client = httpx.AsyncClient(timeout=30.0)
         self._db = mongodb["ai_gateway"]
-        self._subscriptions_collection = self._db["rss_subscriptions"]
+        self._feeds_collection = self._db["rss_feeds"]
         self._articles_collection = self._db["rss_articles"]
     
-    async def fetch_feed(self, subscription_id: str) -> FetchResult:
-        # 抓取单个RSS订阅
-        # 1. 获取订阅信息
-        sub = await self._subscriptions_collection.find_one({"_id": subscription_id})
+    async def create_feed(self, feed_data: Dict[str, Any]) -> Dict[str, Any]:
+        """创建RSS订阅源"""
+        feed_doc = {
+            "_id": ObjectId(),
+            "name": feed_data["name"],
+            "url": feed_data["url"],
+            "enabled": feed_data.get("enabled", True),
+            "fetch_interval": feed_data.get("fetch_interval", 30),
+            "retention_days": feed_data.get("retention_days", 30),
+            "default_permanent": feed_data.get("default_permanent", False),
+            "last_fetch_time": None,
+            "article_count": 0,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await self._feeds_collection.insert_one(feed_doc)
+        return self._doc_to_feed(feed_doc)
+    
+    async def get_feeds(self, enabled: Optional[bool] = None, 
+                       page: int = 1, page_size: int = 20) -> Tuple[List[Dict], int]:
+        """获取订阅源列表（支持分页和筛选）"""
+        query = {}
+        if enabled is not None:
+            query["enabled"] = enabled
         
-        # 2. 解析RSS feed
-        feed = feedparser.parse(sub["url"])
+        skip = (page - 1) * page_size
+        cursor = self._feeds_collection.find(query).skip(skip).limit(page_size)
+        feeds = [self._doc_to_feed(doc) async for doc in cursor]
+        total = await self._feeds_collection.count_documents(query)
+        return feeds, total
+    
+    async def update_feed(self, feed_id: str, update_data: Dict[str, Any]) -> Optional[Dict]:
+        """更新订阅源"""
+        update_doc = {"updated_at": datetime.utcnow()}
+        for key in ["name", "enabled", "fetch_interval", "retention_days", "default_permanent"]:
+            if key in update_data:
+                update_doc[key] = update_data[key]
         
-        # 3. 遍历文章
-        for entry in feed.entries:
-            # 4. 访问原文链接，爬取完整内容
+        result = await self._feeds_collection.find_one_and_update(
+            {"_id": ObjectId(feed_id)},
+            {"$set": update_doc},
+            return_document=True
+        )
+        return self._doc_to_feed(result) if result else None
+    
+    async def delete_feed(self, feed_id: str) -> bool:
+        """删除订阅源及其文章"""
+        # 删除关联文章
+        await self._articles_collection.delete_many({"feed_id": feed_id})
+        # 删除订阅源
+        result = await self._feeds_collection.delete_one({"_id": ObjectId(feed_id)})
+        return result.deleted_count > 0
+    
+    async def fetch_feed(self, feed_id: str) -> Dict[str, Any]:
+        """立即抓取单个RSS订阅源"""
+        feed = await self._feeds_collection.find_one({"_id": ObjectId(feed_id)})
+        if not feed:
+            raise ValueError(f"Feed not found: {feed_id}")
+        
+        # 解析RSS feed
+        parsed = feedparser.parse(feed["url"])
+        fetched_count = 0
+        
+        for entry in parsed.entries:
+            # 检查文章是否已存在
+            existing = await self._articles_collection.find_one({
+                "feed_id": feed_id,
+                "url": entry.link
+            })
+            if existing:
+                continue
+            
+            # 抓取完整内容
             article_content = await self._fetch_full_content(entry.link)
             
-            # 5. 保存到MongoDB
-            article = {
-                "_id": generate_uuid(),
-                "subscription_id": subscription_id,
-                "title": entry.title,
+            # 保存文章
+            article_doc = {
+                "_id": ObjectId(),
+                "feed_id": feed_id,
+                "title": entry.get("title", "无标题"),
                 "url": entry.link,
-                "content": article_content["cleaned"],
-                "raw_content": article_content["raw"],
-                "published_at": parse_date(entry.published),
+                "content": article_content["markdown"],
+                "content_length": len(article_content["markdown"]),
+                "published_at": self._parse_date(entry.get("published_parsed") or entry.get("updated_parsed")),
                 "fetched_at": datetime.utcnow(),
-                "fetch_status": article_content["status"],
-                "is_read": False,
-                "knowledge_extracted": False
+                "is_read": False
             }
-            await self._articles_collection.insert_one(article)
-            
-            # 6. 触发知识提取
-            if sub.get("auto_extract", True):
-                await self._extract_article_knowledge(article["_id"], sub["virtual_model"])
+            await self._articles_collection.insert_one(article_doc)
+            fetched_count += 1
         
-        # 7. 更新最后抓取时间
-        await self._subscriptions_collection.update_one(
-            {"_id": subscription_id},
-            {"$set": {"last_fetch_time": datetime.utcnow()}}
+        # 更新最后抓取时间和文章数
+        await self._feeds_collection.update_one(
+            {"_id": ObjectId(feed_id)},
+            {"$set": {
+                "last_fetch_time": datetime.utcnow(),
+                "article_count": await self._articles_collection.count_documents({"feed_id": feed_id})
+            }}
         )
         
-        return FetchResult(articles_fetched=len(feed.entries))
+        return {
+            "success": True,
+            "message": f"成功抓取 {fetched_count} 篇文章",
+            "fetch_id": str(ObjectId()),
+            "feed_id": feed_id,
+            "articles_fetched": fetched_count
+        }
     
     async def _fetch_full_content(self, url: str) -> Dict[str, str]:
-        # 爬取完整文章内容
-        # 1. 发送HTTP请求获取HTML
-        response = await self._http_client.get(url)
-        raw_html = response.text
+        """爬取完整文章内容（使用readability + html2text）"""
+        try:
+            response = await self._http_client.get(url, follow_redirects=True)
+            raw_html = response.text
+            
+            # 使用readability提取正文
+            doc = Document(raw_html)
+            cleaned_html = doc.summary()
+            
+            # 转换为Markdown
+            markdown_content = html2text.html2text(cleaned_html)
+            
+            return {
+                "markdown": markdown_content,
+                "html": cleaned_html,
+                "raw": raw_html[:10000],  # 限制原始HTML大小
+                "status": "success"
+            }
+        except Exception as e:
+            return {
+                "markdown": f"抓取失败: {str(e)}",
+                "html": "",
+                "raw": "",
+                "status": "failed"
+            }
+    
+    async def get_articles(self, feed_id: Optional[str] = None,
+                          is_read: Optional[bool] = None,
+                          page: int = 1, page_size: int = 20) -> Tuple[List[Dict], int]:
+        """获取文章列表（支持feed_id和is_read筛选）"""
+        query = {}
+        if feed_id:
+            query["feed_id"] = feed_id
+        if is_read is not None:
+            query["is_read"] = is_read
         
-        # 2. 使用readability-lxml提取正文
-        doc = Document(raw_html)
-        cleaned_content = doc.summary()
-        title = doc.short_title()
+        skip = (page - 1) * page_size
+        cursor = self._articles_collection.find(query) \
+            .sort("published_at", -1) \
+            .skip(skip).limit(page_size)
         
-        # 3. 转换为Markdown（可选）
-        markdown_content = html2text.html2text(cleaned_content)
+        articles = [self._doc_to_article(doc) async for doc in cursor]
+        total = await self._articles_collection.count_documents(query)
+        return articles, total
+    
+    async def get_article(self, article_id: str) -> Optional[Dict]:
+        """获取文章详情"""
+        article = await self._articles_collection.find_one({"_id": ObjectId(article_id)})
+        if not article:
+            return None
         
+        # 获取订阅源名称
+        feed = await self._feeds_collection.find_one({"_id": ObjectId(article["feed_id"])})
+        article["feed_name"] = feed["name"] if feed else "未知来源"
+        
+        return self._doc_to_article(article)
+    
+    async def mark_article_read(self, article_id: str, is_read: bool = True) -> Optional[Dict]:
+        """标记文章已读/未读"""
+        result = await self._articles_collection.find_one_and_update(
+            {"_id": ObjectId(article_id)},
+            {"$set": {"is_read": is_read}},
+            return_document=True
+        )
+        return self._doc_to_article(result) if result else None
+    
+    def _doc_to_feed(self, doc: Dict) -> Dict:
+        """将MongoDB文档转换为Feed对象"""
         return {
-            "raw": raw_html,
-            "cleaned": cleaned_content,
-            "markdown": markdown_content,
-            "title": title,
-            "status": "full_content"
+            "id": str(doc["_id"]),
+            "name": doc["name"],
+            "url": doc["url"],
+            "enabled": doc["enabled"],
+            "fetch_interval": doc["fetch_interval"],
+            "retention_days": doc["retention_days"],
+            "default_permanent": doc["default_permanent"],
+            "last_fetch_time": doc["last_fetch_time"].isoformat() if doc.get("last_fetch_time") else None,
+            "article_count": doc.get("article_count", 0),
+            "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
+            "updated_at": doc["updated_at"].isoformat() if doc.get("updated_at") else None
         }
+    
+    def _doc_to_article(self, doc: Dict) -> Dict:
+        """将MongoDB文档转换为Article对象"""
+        return {
+            "id": str(doc["_id"]),
+            "feed_id": doc["feed_id"],
+            "feed_name": doc.get("feed_name", ""),
+            "title": doc["title"],
+            "url": doc["url"],
+            "content": doc["content"],
+            "content_length": doc.get("content_length", 0),
+            "published_at": doc["published_at"].isoformat() if doc.get("published_at") else None,
+            "fetched_at": doc["fetched_at"].isoformat() if doc.get("fetched_at") else None,
+            "is_read": doc.get("is_read", False)
+        }
+```
+
+**热门订阅源预设数据**:
+```python
+POPULAR_RSS_SOURCES = [
+    {"name": "少数派", "url": "https://sspai.com/feed", "description": "高品质数字消费指南", "subscriber_count": "31.5K"},
+    {"name": "36氪", "url": "https://36kr.com/feed", "description": "科技创投商业资讯", "subscriber_count": "12.5K"},
+    {"name": "阮一峰的网络日志", "url": "http://www.ruanyifeng.com/blog/atom.xml", "description": "科技爱好者周刊", "subscriber_count": "8.9K"},
+    {"name": "知乎日报", "url": "https://www.zhihu.com/rss", "description": "知乎精选内容", "subscriber_count": "6.2K"},
+    {"name": "GitHub Trending", "url": "https://github.com/trending", "description": "GitHub热门项目", "subscriber_count": "5.8K"},
+    {"name": "InfoQ", "url": "https://www.infoq.cn/feed", "description": "企业级技术社区", "subscriber_count": "4.5K"},
+    {"name": "稀土掘金", "url": "https://juejin.cn/rss", "description": "开发者技术社区", "subscriber_count": "3.2K"},
+    {"name": "V2EX", "url": "https://www.v2ex.com/index.xml", "description": "创意工作者社区", "subscriber_count": "2.1K"},
+    {"name": "机器之心", "url": "https://www.jiqizhixin.com/rss", "description": "人工智能媒体", "subscriber_count": "1.8K"},
+    {"name": "爱范儿", "url": "https://www.ifanr.com/feed", "description": "数字公民媒体", "subscriber_count": "1.5K"}
+]
+```
+
+**Config.yml RSS配置**:
+```yaml
+rss:
+  max_concurrent: 5          # 最大并发抓取数
+  auto_fetch: true           # 是否自动抓取
+  fetch_interval: 30         # 抓取间隔（分钟）
+  retention_days: 30         # 文章保留天数
+  default_permanent: false   # 默认是否永久保存
+  skill:                     # RSS Skill配置
+    enabled: true
+    version: "v1"
+    custom:
+      enabled: true
+      version: "v1"
 ```
 
 ---

@@ -1,205 +1,276 @@
 """
-RSS订阅管理API
+RSS订阅管理API - 连接MongoDB实现
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
+from ...dependencies import get_mongodb
+from core.rss_fetcher import RSSFetcher
 
 router = APIRouter()
 
 
-class RSSFeed(BaseModel):
-    id: str
+class RSSFeedCreate(BaseModel):
     name: str
     url: str
-    enabled: bool
-    update_interval: str
-    article_count: int
-    retention_days: int
-    permanent: bool
-    model: str
+    virtual_model: str = "demo1"
+    fetch_interval: int = 30
+    retention_days: int = 30
+    auto_extract: bool = True
 
 
-class RSSArticle(BaseModel):
-    id: str
-    feed_id: str
-    title: str
-    link: str
-    published_at: str
-    content: str
-    fetch_status: str
-    content_length: int
+class RSSFeedUpdate(BaseModel):
+    name: Optional[str] = None
+    url: Optional[str] = None
+    enabled: Optional[bool] = None
+    fetch_interval: Optional[int] = None
+    retention_days: Optional[int] = None
+    auto_extract: Optional[bool] = None
 
 
-# Mock data
-RSS_FEEDS = [
-    {
-        "id": "feed_001",
-        "name": "技术新闻",
-        "url": "https://tech.example.com/feed.xml",
-        "enabled": True,
-        "update_interval": "1h",
-        "article_count": 156,
-        "retention_days": 30,
-        "permanent": False,
-        "model": "demo1"
-    },
-    {
-        "id": "feed_002",
-        "name": "AI研究",
-        "url": "https://ai.example.com/rss",
-        "enabled": True,
-        "update_interval": "6h",
-        "article_count": 42,
-        "retention_days": 90,
-        "permanent": True,
-        "model": "demo2"
-    }
+class MarkReadRequest(BaseModel):
+    is_read: bool = True
+
+
+# 热门订阅源预设数据
+POPULAR_FEEDS = [
+    {"name": "少数派", "url": "https://sspai.com/feed", "icon": "sspai", "subscribers": "31.5K"},
+    {"name": "36氪", "url": "https://36kr.com/feed", "icon": "36kr", "subscribers": "12.5K"},
+    {"name": "阮一峰的网络日志", "url": "https://ruanyifeng.com/blog/atom.xml", "icon": "ruanyf", "subscribers": "8.9K"},
+    {"name": "知乎日报", "url": "https://zhihurss.miantiao.me/daily", "icon": "zhihu", "subscribers": "6.2K"},
+    {"name": "GitHub Trending", "url": "https://github.com/trending/rss", "icon": "github", "subscribers": "5.8K"},
+    {"name": "InfoQ", "url": "https://www.infoq.cn/feed", "icon": "infoq", "subscribers": "4.5K"},
+    {"name": "稀土掘金", "url": "https://juejin.cn/rss", "icon": "juejin", "subscribers": "3.2K"},
+    {"name": "V2EX", "url": "https://www.v2ex.com/feed/tab/tech", "icon": "v2ex", "subscribers": "2.1K"},
+    {"name": "机器之心", "url": "https://www.jiqizhixin.com/rss", "icon": "jiqizhixin", "subscribers": "1.8K"},
+    {"name": "爱范儿", "url": "https://www.ifanr.com/feed", "icon": "ifanr", "subscribers": "1.5K"}
 ]
 
-RSS_ARTICLES = [
-    {
-        "id": "article_001",
-        "feed_id": "feed_001",
-        "title": "新技术发布",
-        "link": "https://tech.example.com/article/1",
-        "published_at": "2025-01-09T10:00:00Z",
-        "content": "这是一篇关于新技术发布的文章...",
-        "fetch_status": "full",
-        "content_length": 1500
-    },
-    {
-        "id": "article_002",
-        "feed_id": "feed_001",
-        "title": "行业动态",
-        "link": "https://tech.example.com/article/2",
-        "published_at": "2025-01-09T09:00:00Z",
-        "content": "行业最新动态...",
-        "fetch_status": "summary",
-        "content_length": 300
-    }
-]
+
+def get_rss_fetcher(mongodb=Depends(get_mongodb)):
+    """获取RSS Fetcher实例"""
+    return RSSFetcher(mongodb)
 
 
 @router.get("/rss/feeds")
 async def get_feeds(
     page: int = 1,
     page_size: int = 20,
-    enabled: Optional[bool] = None
+    enabled: Optional[bool] = None,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
 ):
     """获取RSS订阅列表"""
-    result = RSS_FEEDS
-    
-    if enabled is not None:
-        result = [f for f in result if f["enabled"] == enabled]
-    
-    return {
-        "code": 200,
-        "message": "success",
-        "data": {
-            "items": result,
-            "total": len(result),
-            "page": page,
-            "page_size": page_size
+    try:
+        offset = (page - 1) * page_size
+        result = await fetcher.list_subscriptions(
+            limit=page_size,
+            offset=offset
+        )
+        
+        # 如果有过滤条件，手动过滤
+        subscriptions = result["subscriptions"]
+        if enabled is not None:
+            subscriptions = [s for s in subscriptions if s.get("enabled", True) == enabled]
+        
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "items": subscriptions,
+                "total": result["total"],
+                "page": page,
+                "page_size": page_size
+            }
         }
-    }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取订阅列表失败: {str(e)}")
 
 
 @router.post("/rss/feeds")
-async def create_feed(feed: dict):
+async def create_feed(
+    feed: RSSFeedCreate,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
     """创建RSS订阅"""
-    import uuid
-    
-    new_feed = {
-        "id": f"feed_{uuid.uuid4().hex[:8]}",
-        **feed,
-        "article_count": 0
-    }
-    
-    RSS_FEEDS.append(new_feed)
-    
-    return {
-        "code": 200,
-        "message": "订阅创建成功",
-        "data": new_feed
-    }
+    try:
+        result = await fetcher.create_subscription(
+            name=feed.name,
+            url=feed.url,
+            virtual_model=feed.virtual_model,
+            fetch_interval=feed.fetch_interval,
+            retention_days=feed.retention_days,
+            auto_extract=feed.auto_extract
+        )
+        return {
+            "code": 200,
+            "message": "订阅创建成功",
+            "data": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建订阅失败: {str(e)}")
 
 
 @router.put("/rss/feeds/{feed_id}")
-async def update_feed(feed_id: str, feed_data: dict):
+async def update_feed(
+    feed_id: str,
+    feed_data: RSSFeedUpdate,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
     """更新RSS订阅"""
-    for i, feed in enumerate(RSS_FEEDS):
-        if feed["id"] == feed_id:
-            RSS_FEEDS[i].update(feed_data)
-            return {
-                "code": 200,
-                "message": "订阅更新成功",
-                "data": RSS_FEEDS[i]
-            }
-    
-    raise HTTPException(status_code=404, detail="订阅不存在")
+    try:
+        updates = feed_data.dict(exclude_unset=True)
+        success = await fetcher.update_subscription(feed_id, updates)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="订阅不存在")
+        
+        # 获取更新后的订阅信息
+        subscription = await fetcher.get_subscription(feed_id)
+        
+        return {
+            "code": 200,
+            "message": "订阅更新成功",
+            "data": subscription
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新订阅失败: {str(e)}")
 
 
 @router.delete("/rss/feeds/{feed_id}")
-async def delete_feed(feed_id: str):
+async def delete_feed(
+    feed_id: str,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
     """删除RSS订阅"""
-    global RSS_FEEDS
-    
-    original_len = len(RSS_FEEDS)
-    RSS_FEEDS = [f for f in RSS_FEEDS if f["id"] != feed_id]
-    
-    if len(RSS_FEEDS) < original_len:
+    try:
+        success = await fetcher.delete_subscription(feed_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="订阅不存在")
+        
         return {
             "code": 200,
             "message": "订阅删除成功",
             "data": None
         }
-    
-    raise HTTPException(status_code=404, detail="订阅不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除订阅失败: {str(e)}")
 
 
 @router.post("/rss/feeds/{feed_id}/fetch")
-async def fetch_feed(feed_id: str):
+async def fetch_feed(
+    feed_id: str,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
     """立即抓取订阅"""
-    return {
-        "code": 200,
-        "message": "抓取任务已提交",
-        "data": None
-    }
+    try:
+        result = await fetcher.fetch_feed(feed_id)
+        return {
+            "code": 200,
+            "message": "抓取任务已完成",
+            "data": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"抓取失败: {str(e)}")
 
 
 @router.get("/rss/articles")
 async def get_articles(
     feed_id: Optional[str] = None,
+    is_read: Optional[bool] = None,
     page: int = 1,
-    page_size: int = 20
+    page_size: int = 20,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
 ):
     """获取文章列表"""
-    result = RSS_ARTICLES
-    
-    if feed_id:
-        result = [a for a in result if a["feed_id"] == feed_id]
-    
+    try:
+        offset = (page - 1) * page_size
+        result = await fetcher.list_articles(
+            subscription_id=feed_id,
+            is_read=is_read,
+            limit=page_size,
+            offset=offset
+        )
+        
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "items": result["articles"],
+                "total": result["total"],
+                "page": page,
+                "page_size": page_size
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取文章列表失败: {str(e)}")
+
+
+@router.get("/rss/articles/{article_id}")
+async def get_article(
+    article_id: str,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
+    """获取文章详情"""
+    try:
+        article = await fetcher.get_article(article_id)
+        
+        if not article:
+            raise HTTPException(status_code=404, detail="文章不存在")
+        
+        return {
+            "code": 200,
+            "message": "success",
+            "data": article
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取文章详情失败: {str(e)}")
+
+
+@router.post("/rss/articles/{article_id}/read")
+async def mark_article_read(
+    article_id: str,
+    request: MarkReadRequest,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
+    """标记文章已读/未读"""
+    try:
+        success = await fetcher.mark_article_read(article_id, request.is_read)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="文章不存在")
+        
+        return {
+            "code": 200,
+            "message": "标记成功",
+            "data": {"is_read": request.is_read}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"标记失败: {str(e)}")
+
+
+@router.get("/rss/discover")
+async def discover_feeds():
+    """获取热门推荐订阅源（10个）"""
     return {
         "code": 200,
         "message": "success",
         "data": {
-            "items": result,
-            "total": len(result),
-            "page": page,
-            "page_size": page_size
+            "items": POPULAR_FEEDS,
+            "total": len(POPULAR_FEEDS)
         }
-    }
-
-
-@router.post("/rss/import")
-async def import_opml(file: UploadFile = File(...)):
-    """导入OPML文件"""
-    # TODO: Parse OPML and create feeds
-    
-    return {
-        "code": 200,
-        "message": "导入成功",
-        "data": {"imported": 5}
     }

@@ -7,6 +7,7 @@ export const useRSSStore = defineStore('rss', () => {
   const feeds = ref<RSSFeed[]>([])
   const articles = ref<RSSArticle[]>([])
   const loading = ref(false)
+  const discoverFeeds = ref<Array<{name: string, url: string, icon: string, subscribers: string}>>([])
 
   // Actions
   async function fetchFeeds() {
@@ -24,11 +25,14 @@ export const useRSSStore = defineStore('rss', () => {
     }
   }
 
-  async function fetchArticles(feedId?: string) {
+  async function fetchArticles(feedId?: string, isRead?: boolean) {
     try {
-      const url = feedId
-        ? `/admin/ai/v1/rss/articles?feed_id=${feedId}`
-        : '/admin/ai/v1/rss/articles'
+      let url = '/admin/ai/v1/rss/articles'
+      const params = new URLSearchParams()
+      if (feedId) params.append('feed_id', feedId)
+      if (isRead !== undefined) params.append('is_read', String(isRead))
+      if (params.toString()) url += '?' + params.toString()
+      
       const response = await fetch(url)
       const result = await response.json()
       if (result.code === 200) {
@@ -36,6 +40,50 @@ export const useRSSStore = defineStore('rss', () => {
       }
     } catch (error) {
       console.error('Failed to fetch articles:', error)
+    }
+  }
+
+  async function getArticle(id: string): Promise<RSSArticle | null> {
+    try {
+      const response = await fetch(`/admin/ai/v1/rss/articles/${id}`)
+      const result = await response.json()
+      if (result.code === 200) {
+        return result.data
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to get article:', error)
+      return null
+    }
+  }
+
+  async function markArticleRead(id: string, isRead: boolean = true): Promise<boolean> {
+    try {
+      const response = await fetch(`/admin/ai/v1/rss/articles/${id}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_read: isRead })
+      })
+      const result = await response.json()
+      return result.code === 200
+    } catch (error) {
+      console.error('Failed to mark article read:', error)
+      return false
+    }
+  }
+
+  async function fetchDiscover(): Promise<Array<{name: string, url: string, icon: string, subscribers: string}>> {
+    try {
+      const response = await fetch('/admin/ai/v1/rss/discover')
+      const result = await response.json()
+      if (result.code === 200) {
+        discoverFeeds.value = result.data.items
+        return result.data.items
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to fetch discover feeds:', error)
+      return []
     }
   }
 
@@ -131,9 +179,13 @@ export const useRSSStore = defineStore('rss', () => {
   return {
     feeds,
     articles,
+    discoverFeeds,
     loading,
     fetchFeeds,
     fetchArticles,
+    getArticle,
+    markArticleRead,
+    fetchDiscover,
     createFeed,
     updateFeed,
     deleteFeed,

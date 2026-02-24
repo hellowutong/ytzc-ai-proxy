@@ -129,13 +129,16 @@ export interface RSSFeed {
 
 export interface RSSArticle {
   id: string
-  feed_id: string
+  subscription_id: string
   title: string
-  link: string
+  url: string
   published_at: string
   content: string
   fetch_status: 'full' | 'summary' | 'failed'
   content_length: number
+  is_read?: boolean
+  fetched_at?: string
+  author?: string
 }
 
 export interface LogEntry {

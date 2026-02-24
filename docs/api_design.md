@@ -2112,39 +2112,42 @@ auto_transcribe: "true"
 
 ### 2.8 RSS订阅管理
 
-#### 2.8.1 订阅源列表
+#### 2.8.1 获取订阅源列表
 
-**GET** `/admin/ai/v1/rss/subscriptions?status=active&limit=20`
+**GET** `/admin/ai/v1/rss/feeds?enabled=true&page=1&page_size=20`
 
 **查询参数**:
-- `status`: active/inactive/all
-- `keyword`: 搜索关键词
+- `enabled`: true/false/all - 按启用状态筛选（可选，默认all）
+- `page`: 页码（可选，默认1）
+- `page_size`: 每页数量（可选，默认20）
 
 **响应**:
 ```json
 {
-  "subscriptions": [
+  "items": [
     {
-      "id": "rss_001",
-      "name": "AI新闻",
-      "url": "https://news.ai.com/feed.xml",
+      "id": "507f1f77bcf86cd799439011",
+      "name": "少数派",
+      "url": "https://sspai.com/feed",
       "enabled": true,
       "fetch_interval": 30,
       "retention_days": 30,
       "default_permanent": false,
-      "virtual_model": "demo1",
-      "article_count": 150,
       "last_fetch_time": "2026-02-24T14:00:00Z",
-      "created_at": "2026-01-01T00:00:00Z"
+      "article_count": 150,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-02-24T12:00:00Z"
     }
   ],
-  "total": 10
+  "total": 10,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
-#### 2.8.2 创建订阅
+#### 2.8.2 创建订阅源
 
-**POST** `/admin/ai/v1/rss/subscriptions`
+**POST** `/admin/ai/v1/rss/feeds`
 
 **请求体**:
 ```json
@@ -2154,100 +2157,126 @@ auto_transcribe: "true"
   "enabled": true,
   "fetch_interval": 60,
   "retention_days": 30,
-  "default_permanent": false,
-  "virtual_model": "demo1"
+  "default_permanent": false
 }
 ```
 
-#### 2.8.3 更新订阅
+**响应**:
+```json
+{
+  "id": "507f1f77bcf86cd799439012",
+  "name": "技术博客",
+  "url": "https://blog.example.com/feed.xml",
+  "enabled": true,
+  "fetch_interval": 60,
+  "retention_days": 30,
+  "default_permanent": false,
+  "last_fetch_time": null,
+  "article_count": 0,
+  "created_at": "2026-02-24T14:00:00Z",
+  "updated_at": "2026-02-24T14:00:00Z"
+}
+```
 
-**PUT** `/admin/ai/v1/rss/subscriptions/{id}`
+#### 2.8.3 更新订阅源
 
-#### 2.8.4 删除订阅
+**PUT** `/admin/ai/v1/rss/feeds/{id}`
 
-**DELETE** `/admin/ai/v1/rss/subscriptions/{id}`
+**请求体**（字段可选）:
+```json
+{
+  "name": "更新后的名称",
+  "enabled": false,
+  "fetch_interval": 120,
+  "retention_days": 7,
+  "default_permanent": true
+}
+```
 
-#### 2.8.5 立即抓取
+**响应**: 更新后的完整订阅源对象
 
-**POST** `/admin/ai/v1/rss/subscriptions/{id}/fetch`
+#### 2.8.4 删除订阅源
+
+**DELETE** `/admin/ai/v1/rss/feeds/{id}`
+
+**响应**:
+```json
+{
+  "success": true,
+  "message": "订阅源已删除"
+}
+```
+
+#### 2.8.5 立即抓取订阅源
+
+**POST** `/admin/ai/v1/rss/feeds/{id}/fetch`
 
 **响应**:
 ```json
 {
   "success": true,
   "message": "抓取任务已提交",
-  "fetch_id": "fetch_001"
+  "fetch_id": "fetch_001",
+  "feed_id": "507f1f77bcf86cd799439011"
 }
 ```
 
-#### 2.8.6 批量导入
+#### 2.8.6 获取文章列表
 
-**POST** `/admin/ai/v1/rss/subscriptions/import`
-
-**请求体** (multipart/form-data):
-```
-file: [OPML文件]
-```
-
-**响应**:
-```json
-{
-  "success": true,
-  "imported": 5,
-  "failed": 0
-}
-```
-
-#### 2.8.7 获取文章列表
-
-**GET** `/admin/ai/v1/rss/subscriptions/{id}/articles?limit=20&status=unread`
+**GET** `/admin/ai/v1/rss/articles?feed_id={id}&is_read=false&page=1&page_size=20`
 
 **查询参数**:
-- `status`: all/unread/read
-- `limit`: 数量
-- `offset`: 偏移量
+- `feed_id`: 订阅源ID（可选）
+- `is_read`: true/false - 按已读状态筛选（可选）
+- `page`: 页码（可选，默认1）
+- `page_size`: 每页数量（可选，默认20）
 
 **响应**:
 ```json
 {
-  "articles": [
+  "items": [
     {
-      "id": "article_001",
+      "id": "507f1f77bcf86cd799439021",
+      "feed_id": "507f1f77bcf86cd799439011",
+      "feed_name": "少数派",
       "title": "AI最新进展",
       "url": "https://news.ai.com/article/1",
-      "content": "完整的文章内容...",  # 爬取的完整内容
-      "summary": "摘要...",
+      "content": "完整的文章内容...",
+      "content_length": 3500,
       "published_at": "2026-02-24T10:00:00Z",
       "fetched_at": "2026-02-24T14:00:00Z",
-      "is_read": false,
-      "knowledge_extracted": true,
-      "fetch_status": "full_content"  # full_content/summary_only/failed
+      "is_read": false
     }
   ],
-  "total": 150
+  "total": 150,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
-#### 2.8.8 查看文章详情
+#### 2.8.7 获取文章详情
 
 **GET** `/admin/ai/v1/rss/articles/{id}`
 
 **响应**:
 ```json
 {
-  "id": "article_001",
+  "id": "507f1f77bcf86cd799439021",
+  "feed_id": "507f1f77bcf86cd799439011",
+  "feed_name": "少数派",
   "title": "AI最新进展",
   "url": "https://news.ai.com/article/1",
-  "content": "完整的HTML/Markdown内容",
-  "content_format": "markdown",  # html/markdown/plain
+  "content": "完整的HTML/Markdown内容...",
+  "content_length": 3500,
   "published_at": "2026-02-24T10:00:00Z",
-  "knowledge_references": [...]
+  "fetched_at": "2026-02-24T14:00:00Z",
+  "is_read": true
 }
 ```
 
-#### 2.8.9 标记已读/未读
+#### 2.8.8 标记文章已读/未读
 
-**PUT** `/admin/ai/v1/rss/articles/{id}/read`
+**POST** `/admin/ai/v1/rss/articles/{id}/read`
 
 **请求体**:
 ```json
@@ -2256,25 +2285,107 @@ file: [OPML文件]
 }
 ```
 
-#### 2.8.10 删除文章
+**响应**:
+```json
+{
+  "success": true,
+  "message": "已标记为已读",
+  "article_id": "507f1f77bcf86cd799439021",
+  "is_read": true
+}
+```
 
-**DELETE** `/admin/ai/v1/rss/articles/{id}`
+#### 2.8.9 获取热门订阅源推荐
 
-#### 2.8.11 获取Skill配置
-
-**GET** `/admin/ai/v1/rss/skill-config`
+**GET** `/admin/ai/v1/rss/discover`
 
 **响应**:
 ```json
 {
-  "system": {"enabled": true, "version": "v1"},
-  "custom": {"enabled": true, "version": "v2"}
+  "sources": [
+    {
+      "name": "少数派",
+      "url": "https://sspai.com/feed",
+      "description": "高品质数字消费指南",
+      "subscriber_count": "31.5K"
+    },
+    {
+      "name": "36氪",
+      "url": "https://36kr.com/feed",
+      "description": "科技创投商业资讯",
+      "subscriber_count": "12.5K"
+    },
+    {
+      "name": "阮一峰的网络日志",
+      "url": "http://www.ruanyifeng.com/blog/atom.xml",
+      "description": "科技爱好者周刊",
+      "subscriber_count": "8.9K"
+    },
+    {
+      "name": "知乎日报",
+      "url": "https://www.zhihu.com/rss",
+      "description": "知乎精选内容",
+      "subscriber_count": "6.2K"
+    },
+    {
+      "name": "GitHub Trending",
+      "url": "https://github.com/trending",
+      "description": "GitHub热门项目",
+      "subscriber_count": "5.8K"
+    },
+    {
+      "name": "InfoQ",
+      "url": "https://www.infoq.cn/feed",
+      "description": "企业级技术社区",
+      "subscriber_count": "4.5K"
+    },
+    {
+      "name": "稀土掘金",
+      "url": "https://juejin.cn/rss",
+      "description": "开发者技术社区",
+      "subscriber_count": "3.2K"
+    },
+    {
+      "name": "V2EX",
+      "url": "https://www.v2ex.com/index.xml",
+      "description": "创意工作者社区",
+      "subscriber_count": "2.1K"
+    },
+    {
+      "name": "机器之心",
+      "url": "https://www.jiqizhixin.com/rss",
+      "description": "人工智能媒体",
+      "subscriber_count": "1.8K"
+    },
+    {
+      "name": "爱范儿",
+      "url": "https://www.ifanr.com/feed",
+      "description": "数字公民媒体",
+      "subscriber_count": "1.5K"
+    }
+  ]
 }
 ```
 
-#### 2.8.12 更新Skill配置
+#### 2.8.10 获取RSS配置
 
-**PUT** `/admin/ai/v1/rss/skill-config`
+**GET** `/admin/ai/v1/config` （返回config.yml中的rss部分）
+
+**Config.yml RSS配置结构**:
+```yaml
+rss:
+  max_concurrent: 5          # 最大并发抓取
+  auto_fetch: true           # 自动抓取
+  fetch_interval: 30         # 抓取间隔（分钟）
+  retention_days: 30         # 保留天数
+  default_permanent: false   # 默认永久保存
+  skill:                     # Skill配置
+    enabled: true
+    version: "v1"
+    custom:
+      enabled: true
+      version: "v1"
+```
 
 ---
 

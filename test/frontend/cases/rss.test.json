@@ -1,6 +1,7 @@
 {
   "test_suite": "RSSManager",
   "description": "RSS订阅管理页面测试套件",
+  "version": "1.0.0",
   "test_cases": [
     {
       "id": "F-TC014",
@@ -16,16 +17,208 @@
       },
       "actions": [
         {"type": "click", "target": "button:contains('添加订阅')"},
-        {"type": "fill", "target": "input[name='name']", "value": "Test Feed"},
-        {"type": "fill", "target": "input[name='url']", "value": "https://example.com/feed.xml"},
-        {"type": "click", "target": "button[type='submit']"}
+        {"type": "fill", "target": "input[placeholder*='RSS URL']", "value": "https://example.com/feed.xml"},
+        {"type": "click", "target": "button:contains('搜索并添加')"}
       ],
       "expected": {
-        "subscription_added": true
+        "subscription_added": true,
+        "dialog_closed": true
       },
       "assertions": [
-        "expect(api.post).toHaveBeenCalled()"
+        "expect(api.post).toHaveBeenCalledWith('/admin/ai/v1/rss/feeds')"
+      ]
+    },
+    {
+      "id": "F-TC015",
+      "name": "test_load_popular_feeds",
+      "description": "测试加载热门推荐订阅源",
+      "category": "integration",
+      "priority": "P1",
+      "component": "RSS",
+      "preconditions": ["网络连接正常"],
+      "actions": [
+        {"type": "click", "target": "button:contains('添加订阅')"},
+        {"type": "wait", "duration": 1000}
+      ],
+      "expected": {
+        "popular_feeds_loaded": true,
+        "feed_count": 10
+      },
+      "assertions": [
+        "expect(screen.getByText('少数派')).toBeInTheDocument()",
+        "expect(screen.getByText('36氪')).toBeInTheDocument()"
+      ]
+    },
+    {
+      "id": "F-TC016",
+      "name": "test_select_feed",
+      "description": "测试选择订阅源",
+      "category": "integration",
+      "priority": "P0",
+      "component": "RSS",
+      "preconditions": ["订阅源列表已加载"],
+      "actions": [
+        {"type": "click", "target": ".feed-item:first-child"}
+      ],
+      "expected": {
+        "feed_selected": true,
+        "articles_loaded": true
+      },
+      "assertions": [
+        "expect(api.get).toHaveBeenCalledWith('/admin/ai/v1/rss/articles')"
+      ]
+    },
+    {
+      "id": "F-TC017",
+      "name": "test_select_article",
+      "description": "测试选择文章阅读",
+      "category": "integration",
+      "priority": "P0",
+      "component": "RSS",
+      "preconditions": ["文章列表已加载"],
+      "actions": [
+        {"type": "click", "target": ".article-card:first-child"}
+      ],
+      "expected": {
+        "article_selected": true,
+        "content_displayed": true,
+        "marked_as_read": true
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalledWith(expect.stringContaining('/read'))"
+      ]
+    },
+    {
+      "id": "F-TC018",
+      "name": "test_filter_articles",
+      "description": "测试筛选文章（全部/未读/已读）",
+      "category": "functional",
+      "priority": "P1",
+      "component": "RSS",
+      "preconditions": ["文章列表已加载"],
+      "actions": [
+        {"type": "click", "target": "span:contains('未读')"}
+      ],
+      "expected": {
+        "articles_filtered": true,
+        "show_unread_only": true
+      },
+      "assertions": [
+        "expect(api.get).toHaveBeenCalledWith(expect.stringContaining('is_read=false'))"
+      ]
+    },
+    {
+      "id": "F-TC019",
+      "name": "test_search_articles",
+      "description": "测试搜索文章",
+      "category": "functional",
+      "priority": "P2",
+      "component": "RSS",
+      "preconditions": ["文章列表已加载"],
+      "actions": [
+        {"type": "fill", "target": "input[placeholder*='搜索文章']", "value": "AI"}
+      ],
+      "expected": {
+        "articles_searched": true,
+        "filtered_results": true
+      },
+      "assertions": [
+        "expect(screen.queryAllByText(/AI/i).length).toBeGreaterThan(0)"
+      ]
+    },
+    {
+      "id": "F-TC020",
+      "name": "test_context_menu",
+      "description": "测试订阅源右键菜单",
+      "category": "functional",
+      "priority": "P1",
+      "component": "RSS",
+      "preconditions": ["订阅源列表已加载"],
+      "actions": [
+        {"type": "rightClick", "target": ".feed-item:first-child"}
+      ],
+      "expected": {
+        "context_menu_shown": true,
+        "menu_items": ["编辑", "立即抓取", "删除"]
+      },
+      "assertions": [
+        "expect(screen.getByText('编辑')).toBeVisible()",
+        "expect(screen.getByText('立即抓取')).toBeVisible()",
+        "expect(screen.getByText('删除')).toBeVisible()"
+      ]
+    },
+    {
+      "id": "F-TC021",
+      "name": "test_fetch_now",
+      "description": "测试立即抓取订阅",
+      "category": "integration",
+      "priority": "P1",
+      "component": "RSS",
+      "preconditions": ["订阅源列表已加载"],
+      "actions": [
+        {"type": "rightClick", "target": ".feed-item:first-child"},
+        {"type": "click", "target": "span:contains('立即抓取')"}
+      ],
+      "expected": {
+        "fetch_triggered": true,
+        "success_message": "抓取任务已提交"
+      },
+      "assertions": [
+        "expect(api.post).toHaveBeenCalledWith(expect.stringContaining('/fetch'))"
+      ]
+    },
+    {
+      "id": "F-TC022",
+      "name": "test_rss_config_dialog",
+      "description": "测试RSS配置弹窗",
+      "category": "functional",
+      "priority": "P2",
+      "component": "RSS",
+      "preconditions": ["组件已挂载"],
+      "actions": [
+        {"type": "click", "target": "button:contains('RSS配置')"}
+      ],
+      "expected": {
+        "dialog_opened": true,
+        "config_loaded": true
+      },
+      "assertions": [
+        "expect(screen.getByText('抓取配置')).toBeInTheDocument()",
+        "expect(screen.getByText('Skill 配置')).toBeInTheDocument()"
+      ]
+    },
+    {
+      "id": "F-TC023",
+      "name": "test_three_column_layout",
+      "description": "测试三栏布局",
+      "category": "ui",
+      "priority": "P1",
+      "component": "RSS",
+      "preconditions": ["组件已挂载"],
+      "expected": {
+        "layout_correct": true,
+        "sidebar_width": 240,
+        "article_list_width": 360
+      },
+      "assertions": [
+        "expect(document.querySelector('.sidebar')).toHaveStyle({width: '240px'})",
+        "expect(document.querySelector('.article-list')).toHaveStyle({width: '360px'})"
       ]
     }
-  ]
+  ],
+  "mock_data": {
+    "feeds": [
+      {"id": "feed_001", "name": "少数派", "url": "https://sspai.com/feed", "enabled": true, "article_count": 15},
+      {"id": "feed_002", "name": "36氪", "url": "https://36kr.com/feed", "enabled": true, "article_count": 8}
+    ],
+    "articles": [
+      {"id": "article_001", "subscription_id": "feed_001", "title": "测试文章1", "is_read": false, "published_at": "2026-02-24T10:00:00Z"},
+      {"id": "article_002", "subscription_id": "feed_001", "title": "测试文章2", "is_read": true, "published_at": "2026-02-23T10:00:00Z"}
+    ],
+    "popular_feeds": [
+      {"name": "少数派", "url": "https://sspai.com/feed", "icon": "sspai", "subscribers": "31.5K"},
+      {"name": "36氪", "url": "https://36kr.com/feed", "icon": "36kr", "subscribers": "12.5K"},
+      {"name": "阮一峰的网络日志", "url": "https://ruanyifeng.com/blog/atom.xml", "icon": "ruanyf", "subscribers": "8.9K"}
+    ]
+  }
 }
