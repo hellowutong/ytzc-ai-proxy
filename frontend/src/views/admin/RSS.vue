@@ -138,148 +138,122 @@
         </div>
       </div>
 
-      <!-- 右侧：文章阅读区/AI对话区 -->
+      <!-- 右侧：文章阅读区 -->
       <div class="article-reader" v-if="selectedArticle">
-        <!-- 标签栏 -->
-        <div class="tab-bar">
-          <div 
-            class="tab-item" 
-            :class="{ active: activeTab === 'article' }"
-            @click="activeTab = 'article'"
-          >
-            📖 文章
-          </div>
-          <div 
-            class="tab-item" 
-            :class="{ active: activeTab === 'chat' }"
-            @click="activeTab = 'chat'"
-          >
-            🤖 AI对话
-          </div>
-          <div class="tab-actions">
-            <el-button v-if="activeTab === 'article'" size="small" @click="startAIChat">
-              <el-icon><ChatDotRound /></el-icon>与AI对话
-            </el-button>
+        <div class="reader-header">
+          <div class="feed-tag">📰 {{ getFeedName(selectedArticle.subscription_id) }}</div>
+          <h2 class="reader-title">{{ selectedArticle.title }}</h2>
+          <div class="reader-meta">
+            <span>👤 {{ selectedArticle.author || '未知作者' }}</span>
+            <span>·</span>
+            <span>⏰ {{ formatFullTime(selectedArticle.published_at) }}</span>
           </div>
         </div>
-
-        <!-- 文章内容 -->
-        <div v-show="activeTab === 'article'" class="reader-content-wrapper">
-          <div class="reader-header">
-            <div class="feed-tag">📰 {{ getFeedName(selectedArticle.subscription_id) }}</div>
-            <h2 class="reader-title">{{ selectedArticle.title }}</h2>
-            <div class="reader-meta">
-              <span>👤 {{ selectedArticle.author || '未知作者' }}</span>
-              <span>·</span>
-              <span>⏰ {{ formatFullTime(selectedArticle.published_at) }}</span>
-            </div>
-          </div>
-          
-          <div class="reader-content" v-html="selectedArticle.content"></div>
-          
-          <div class="reader-footer">
-            <el-button @click="closeReader">❌ 关闭</el-button>
-          </div>
+        
+        <div class="reader-content" v-html="selectedArticle.content"></div>
+        
+        <div class="reader-footer">
+          <el-button @click="closeReader">❌ 关闭</el-button>
         </div>
-
-        <!-- AI对话区 -->
-        <div v-show="activeTab === 'chat'" class="chat-area">
-          <!-- 模型选择 -->
-          <div class="chat-header">
-            <div class="model-selector">
-              <span>模型:</span>
-              <el-select v-model="selectedModel" size="small" style="width: 150px;">
-                <el-option
-                  v-for="model in modelStore.enabledModels"
-                  :key="model.name"
-                  :label="model.name"
-                  :value="model.name"
-                />
-              </el-select>
-            </div>
-            <div class="chat-actions">
-              <el-button size="small" @click="chatStore.clearCurrentConversation()">清空对话</el-button>
-            </div>
-          </div>
-
-          <!-- 上下文横幅 -->
-          <div class="context-banner">
-            <div class="context-title">📄 当前上下文: 《{{ selectedArticle.title }}》</div>
-            <div class="context-meta">来源: {{ getFeedName(selectedArticle.subscription_id) }} | {{ formatFullTime(selectedArticle.published_at) }}</div>
-          </div>
-
-          <!-- 快捷操作 -->
-          <div class="quick-actions">
-            <el-button size="small" @click="handleQuickAction('summarize')" :loading="isLoadingChat">📋 总结</el-button>
-            <el-button size="small" @click="handleQuickAction('translate')" :loading="isLoadingChat">🌐 翻译</el-button>
-            <el-button size="small" @click="handleQuickAction('keypoints')" :loading="isLoadingChat">🎯 关键点</el-button>
-          </div>
-
-          <!-- 消息区域 -->
-          <div class="messages-area" ref="messagesContainer">
-            <div v-if="!currentArticleConversation?.messages?.length" class="empty-chat">
-              <p>💬 点击下方快捷按钮或输入问题开始对话</p>
-            </div>
-            <template v-else>
-              <div
-                v-for="(msg, index) in currentArticleConversation.messages"
-                :key="index"
-                class="message"
-                :class="msg.role"
-              >
-                <div class="message-avatar">
-                  {{ msg.role === 'user' ? '👤' : '🤖' }}
-                </div>
-                <div class="message-content">
-                  <div class="message-bubble">{{ msg.content }}</div>
-                  <div v-if="msg.timestamp" class="message-time">
-                    {{ new Date(msg.timestamp).toLocaleTimeString('zh-CN') }}
-                  </div>
-                </div>
-              </div>
-              <div v-if="chatStore.isStreaming" class="message assistant">
-                <div class="message-avatar">🤖</div>
-                <div class="message-content">
-                  <div class="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- 输入区域 -->
-          <div class="input-area">
-            <div class="input-wrapper">
-              <el-input
-                v-model="chatInput"
-                type="textarea"
-                :rows="2"
-                placeholder="输入问题... (Enter发送, Shift+Enter换行)"
-                @keydown.enter.exact.prevent="handleSendMessage"
-                resize="none"
+      </div>
+      
+      <!-- 第四列：AI对话区 -->
+      <div class="chat-area" v-if="selectedArticle">
+        <!-- 模型选择 -->
+        <div class="chat-header">
+          <div class="model-selector">
+            <span>模型:</span>
+            <el-select v-model="selectedModel" size="small" style="width: 120px;">
+              <el-option
+                v-for="model in modelStore.enabledModels"
+                :key="model.name"
+                :label="model.name"
+                :value="model.name"
               />
-              <div class="input-actions">
-                <el-button
-                  v-if="chatStore.isStreaming"
-                  type="danger"
-                  size="small"
-                  @click="chatStore.stopStreaming"
-                >
-                  停止
-                </el-button>
-                <el-button
-                  v-else
-                  type="primary"
-                  size="small"
-                  :disabled="!chatInput.trim()"
-                  @click="handleSendMessage"
-                >
-                  发送
-                </el-button>
+            </el-select>
+          </div>
+          <div class="chat-actions">
+            <el-button size="small" @click="chatStore.clearCurrentConversation()">清空</el-button>
+          </div>
+        </div>
+
+        <!-- 上下文横幅 -->
+        <div class="context-banner">
+          <div class="context-title">📄 {{ selectedArticle.title.slice(0, 30) }}{{ selectedArticle.title.length > 30 ? '...' : '' }}</div>
+          <div class="context-meta">{{ getFeedName(selectedArticle.subscription_id) }}</div>
+        </div>
+
+        <!-- 快捷操作 -->
+        <div class="quick-actions">
+          <el-button size="small" @click="handleQuickAction('summarize')" :loading="isLoadingChat">📋 总结</el-button>
+          <el-button size="small" @click="handleQuickAction('translate')" :loading="isLoadingChat">🌐 翻译</el-button>
+          <el-button size="small" @click="handleQuickAction('keypoints')" :loading="isLoadingChat">🎯 要点</el-button>
+        </div>
+
+        <!-- 消息区域 -->
+        <div class="messages-area" ref="messagesContainer">
+          <div v-if="!currentArticleConversation?.messages?.length" class="empty-chat">
+            <p>💬 点击下方按钮开始对话</p>
+          </div>
+          <template v-else>
+            <div
+              v-for="(msg, index) in currentArticleConversation.messages"
+              :key="index"
+              class="message"
+              :class="msg.role"
+            >
+              <div class="message-avatar">
+                {{ msg.role === 'user' ? '👤' : '🤖' }}
               </div>
+              <div class="message-content">
+                <div class="message-bubble">{{ msg.content }}</div>
+                <div v-if="msg.timestamp" class="message-time">
+                  {{ new Date(msg.timestamp).toLocaleTimeString('zh-CN') }}
+                </div>
+              </div>
+            </div>
+            <div v-if="chatStore.isStreaming" class="message assistant">
+              <div class="message-avatar">🤖</div>
+              <div class="message-content">
+                <div class="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="input-area">
+          <div class="input-wrapper">
+            <el-input
+              v-model="chatInput"
+              type="textarea"
+              :rows="2"
+              placeholder="输入问题... (Enter发送)"
+              @keydown.enter.exact.prevent="handleSendMessage"
+              resize="none"
+            />
+            <div class="input-actions">
+              <el-button
+                v-if="chatStore.isStreaming"
+                type="danger"
+                size="small"
+                @click="chatStore.stopStreaming"
+              >
+                停止
+              </el-button>
+              <el-button
+                v-else"
+                type="primary"
+                size="small"
+                :disabled="!chatInput.trim()"
+                @click="handleSendMessage"
+              >
+                发送
+              </el-button>
             </div>
           </div>
         </div>
@@ -391,7 +365,6 @@ const renameFeedData = ref<RSSFeed | null>(null)
 const chatInput = ref('')
 
 // AI对话相关
-const activeTab = ref<'article' | 'chat'>('article')
 const selectedModel = ref('demo1')
 const isLoadingChat = ref(false)
 
@@ -684,7 +657,6 @@ const handleRenameConfirm = async (feedId: string, newName: string) => {
 const startAIChat = async () => {
   if (!selectedArticle.value) return
   
-  activeTab.value = 'chat'
   
   // 检查是否已有对话
   const existingConv = chatStore.getConversationByArticleId(selectedArticle.value.id)
@@ -705,7 +677,6 @@ const startAIChat = async () => {
 const handleQuickAction = async (action: 'summarize' | 'translate' | 'keypoints') => {
   if (!selectedArticle.value) return
   
-  activeTab.value = 'chat'
   isLoadingChat.value = true
   try {
     await chatStore.executeQuickAction(action, selectedArticle.value)
@@ -1013,14 +984,16 @@ onUnmounted(() => {
 }
 
 /* 右侧阅读区 */
+/* 第三列：文章阅读区 */
 .article-reader {
-  flex: 1;
+  width: 50%;
+  min-width: 400px;
   background: #1e1e1e;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-right: 1px solid #333;
 }
-
 .article-reader.empty {
   justify-content: center;
   align-items: center;
@@ -1127,36 +1100,6 @@ onUnmounted(() => {
 }
 /* AI对话区样式 */
 
-.tab-bar {
-  display: flex;
-  border-bottom: 1px solid #333;
-  background: #1e1e1e;
-  padding: 0 16px;
-}
-
-.tab-item {
-  padding: 12px 20px;
-  cursor: pointer;
-  color: #858585;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.tab-item:hover {
-  color: #cccccc;
-}
-
-.tab-item.active {
-  color: #007acc;
-  border-bottom-color: #007acc;
-}
-
-.tab-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
 .reader-content-wrapper {
   display: flex;
   flex-direction: column;
@@ -1165,10 +1108,12 @@ onUnmounted(() => {
 }
 
 .chat-area {
+  width: 350px;
+  min-width: 320px;
+  background: #1e1e1e;
   display: flex;
   flex-direction: column;
-  height: calc(100% - 45px);
-  background: #1e1e1e;
+  overflow: hidden;
 }
 
 .chat-header {
