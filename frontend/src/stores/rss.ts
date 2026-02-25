@@ -142,6 +142,42 @@ export const useRSSStore = defineStore('rss', () => {
     }
   }
 
+  async function deleteArticle(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/admin/ai/v1/rss/articles/${id}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+      if (result.code === 200) {
+        // 从本地列表中移除
+        articles.value = articles.value.filter(a => a.id !== id)
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Failed to delete article:', error)
+      return false
+    }
+  }
+
+  async function batchDeleteArticles(ids: string[]): Promise<{ success: boolean; count: number }> {
+    try {
+      const response = await fetch(`/admin/ai/v1/rss/articles/batch?ids=${ids.join(',')}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+      if (result.code === 200) {
+        // 从本地列表中移除已删除的文章
+        articles.value = articles.value.filter(a => !ids.includes(a.id))
+        return { success: true, count: result.data?.success_count || ids.length }
+      }
+      return { success: false, count: 0 }
+    } catch (error) {
+      console.error('Failed to batch delete articles:', error)
+      return { success: false, count: 0 }
+    }
+  }
+
   async function fetchFeedNow(id: string) {
     try {
       const response = await fetch(`/admin/ai/v1/rss/feeds/${id}/fetch`, {
@@ -185,6 +221,8 @@ export const useRSSStore = defineStore('rss', () => {
     fetchArticles,
     getArticle,
     markArticleRead,
+    deleteArticle,
+    batchDeleteArticles,
     fetchDiscover,
     createFeed,
     updateFeed,

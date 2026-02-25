@@ -2,7 +2,7 @@
 RSS订阅管理API - 连接MongoDB实现
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -261,6 +261,58 @@ async def mark_article_read(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"标记失败: {str(e)}")
+
+
+# ⚠️ 注意：batch路由必须在/{article_id}路由之前定义
+@router.delete("/rss/articles/batch")
+async def delete_articles_batch(
+    ids: str = Query(..., description="逗号分隔的文章ID列表"),
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
+    """批量删除文章"""
+    try:
+        # 解析逗号分隔的ID列表
+        article_ids = [aid.strip() for aid in ids.split(",") if aid.strip()]
+        
+        if not article_ids:
+            raise HTTPException(status_code=400, detail="未提供有效的文章ID")
+        
+        result = await fetcher.delete_articles(article_ids)
+        
+        message = f"已删除 {result['success_count']} 篇文章"
+        
+        return {
+            "code": 200,
+            "message": message,
+            "data": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"批量删除失败: {str(e)}")
+
+
+@router.delete("/rss/articles/{article_id}")
+async def delete_article(
+    article_id: str,
+    fetcher: RSSFetcher = Depends(get_rss_fetcher)
+):
+    """删除单篇文章"""
+    try:
+        success = await fetcher.delete_article(article_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="文章不存在")
+        
+        return {
+            "code": 200,
+            "message": "文章已删除",
+            "data": {"article_id": article_id}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除文章失败: {str(e)}")
 
 
 @router.get("/rss/discover")

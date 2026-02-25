@@ -2294,7 +2294,53 @@ auto_transcribe: "true"
   "is_read": true
 }
 ```
-
+KV|```
+SP|
+MW|#### 2.8.9 删除文章
+TZ|
+RB|**DELETE** `/admin/ai/v1/rss/articles/{id}`
+JR|
+BR|**响应**:
+YP|```json
+YS|{
+ZS|  "success": true,
+JW|  "message": "文章已删除",
+QM|  "article_id": "507f1f77bcf86cd799439021"
+KV|}
+SP|
+MW|#### 2.8.10 批量删除文章
+TZ|
+RB|**DELETE** `/admin/ai/v1/rss/articles/batch`
+JR|
+PH|**查询参数**:
+ZP|- `ids`: 文章ID列表，逗号分隔 (如 `id1,id2,id3`)
+VJ|
+QJ|**请求体** (可选，优先使用查询参数):
+YP|```json
+VW|{
+KB|  "article_ids": ["id1", "id2", "id3"]
+MZ|}
+WH|```
+TX|
+BR|**响应**:
+YP|```json
+WV|{
+YK|  "code": 200,
+VS|  "message": "已删除 3 篇文章",
+HY|  "data": {
+NY|    "success_count": 3,
+SK|    "failed_count": 0,
+YS|    "failed_ids": []
+YT|  }
+MS|}
+WY|```
+JK|
+VJ|**说明**:
+HQ|- 批量删除多篇文章
+YN|- 返回成功删除的数量和失败的ID列表
+PZ|- 即使部分删除失败，也会继续处理其他ID
+ZP|
+WR|#### 2.8.11 获取热门订阅源推荐
 #### 2.8.9 获取热门订阅源推荐
 
 **GET** `/admin/ai/v1/rss/discover`

@@ -3834,7 +3834,197 @@ pytest-cov==4.1.0
 httpx==0.26.0
 ```
 
----
+ZS|---
+XK|
+JN|## 12. RSS模块设计 (RSS Fetcher)
+TK|
+TV|**文件位置**: `backend/core/rss_fetcher.py`
+QT|
+MZ|**职责**: RSS订阅管理、文章抓取、内容提取、文章管理
+MZ|
+HB|### 12.1 数据模型
+RT|
+HM|```python
+@dataclass
+class RSSSubscription:
+    """RSS订阅源"""
+    id: str
+    name: str
+    url: str
+    enabled: bool = True
+    update_interval: int = 30  # 分钟
+    retention_days: int = 30
+    default_permanent: bool = False
+    article_count: int = 0
+    last_fetch_time: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+@dataclass
+class RSSArticle:
+    """RSS文章"""
+    id: str
+    subscription_id: str
+    title: str
+    url: str
+    content: str
+    raw_content: str
+    content_format: str = "markdown"
+    published_at: Optional[datetime] = None
+    fetched_at: Optional[datetime] = None
+    is_read: bool = False
+    knowledge_extracted: bool = False
+    knowledge_doc_ids: List[str] = field(default_factory=list)
+    fetch_status: str = "summary"  # full_content/rss_summary/blocked/failed
+    fetch_method: str = "rss_only"
+```
+
+XS|
+HB|### 12.2 RSSFetcher类设计
+RT|
+HM|```python
+class RSSFetcher:
+    """RSS抓取器 - 管理订阅和文章"""
+    
+    def __init__(self, db, config_manager):
+        self._db = db
+        self._config = config_manager
+    
+    # === 订阅源管理 ===
+    
+    async def create_subscription(self, data: Dict) -> str:
+        """创建订阅源"""
+        
+    async def list_subscriptions(self, enabled_only: bool = False) -> List[RSSSubscription]:
+        """列出所有订阅源"""
+        
+    async def get_subscription(self, feed_id: str) -> Optional[RSSSubscription]:
+        """获取订阅源详情"""
+        
+    async def update_subscription(self, feed_id: str, data: Dict) -> bool:
+        """更新订阅源"""
+        
+    async def delete_subscription(self, feed_id: str) -> bool:
+        """删除订阅源（级联删除所有文章）"""
+        
+    async def fetch_feed(self, feed_id: str) -> Dict:
+        """立即抓取订阅源内容"""
+    
+    # === 文章管理 ===
+    
+    async def list_articles(
+        self, 
+        feed_id: Optional[str] = None, 
+        is_read: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[RSSArticle], int]:
+        """列出文章，支持筛选和分页"""
+        
+    async def get_article(self, article_id: str) -> Optional[RSSArticle]:
+        """获取单篇文章详情"""
+        
+    async def mark_article_read(self, article_id: str, is_read: bool = True) -> bool:
+        """标记文章已读/未读状态"""
+        
+    async def delete_article(self, article_id: str) -> bool:
+        """
+        删除单篇文章
+        
+        Args:
+            article_id: 文章ID
+            
+        Returns:
+            bool: 是否删除成功
+            
+        删除操作：
+        1. 从 MongoDB 删除文章记录
+        2. 如果文章有关联的知识库文档，保留（由知识库管理）
+        3. 更新订阅源的文章计数
+        """
+        
+    async def delete_articles(self, article_ids: List[str]) -> Dict[str, Any]:
+        """
+        批量删除文章
+        
+        Args:
+            article_ids: 文章ID列表
+            
+        Returns:
+            Dict: {
+                "success_count": 成功删除数量,
+                "failed_count": 失败数量,
+                "failed_ids": 失败的文章ID列表
+            }
+            
+        说明：
+        - 即使部分删除失败，也会继续处理其他ID
+        - 返回详细的删除结果
+        """
+    
+    # === 内容抓取 ===
+    
+    async def _fetch_full_content(self, url: str) -> Tuple[str, str]:
+        """抓取文章完整内容"""
+        
+    async def _extract_with_readability(self, html: str) -> str:
+        """使用readability提取正文"""
+```
+
+XS|
+HB|### 12.3 API端点设计
+RT|
+HB|**订阅源端点**:
+HM|| 端点 | 方法 | 功能 |
+QT||------|------|------|
+MZ|| `/admin/ai/v1/rss/feeds` | GET | 获取订阅源列表 |
+MZ|| `/admin/ai/v1/rss/feeds` | POST | 创建订阅源 |
+MZ|| `/admin/ai/v1/rss/feeds/{id}` | PUT | 更新订阅源 |
+MZ|| `/admin/ai/v1/rss/feeds/{id}` | DELETE | 删除订阅源 |
+MZ|| `/admin/ai/v1/rss/feeds/{id}/fetch` | POST | 立即抓取 |
+
+XS|
+HB|**文章端点**:
+HM|| 端点 | 方法 | 功能 |
+QT||------|------|------|
+MZ|| `/admin/ai/v1/rss/articles` | GET | 获取文章列表 |
+MZ|| `/admin/ai/v1/rss/articles/{id}` | GET | 获取文章详情 |
+MZ|| `/admin/ai/v1/rss/articles/{id}/read` | POST | 标记已读/未读 |
+MZ|| `/admin/ai/v1/rss/articles/{id}` | DELETE | **删除单篇文章** |
+MZ|| `/admin/ai/v1/rss/articles/batch` | DELETE | **批量删除文章** |
+
+XS|
+HB|### 12.4 删除文章实现细节
+RT|
+HB|**单篇删除流程**:
+HM|```
+1. 验证文章ID是否存在
+2. 从 MongoDB rss_articles 集合删除文档
+3. 更新对应订阅源的 article_count（减1）
+4. 返回删除结果
+```
+
+XS|
+HB|**批量删除流程**:
+HM|```
+1. 遍历文章ID列表
+2. 对每个ID执行删除操作
+3. 记录成功和失败的ID
+4. 批量更新订阅源文章计数
+5. 返回统计结果：成功数、失败数、失败ID列表
+```
+
+XS|
+HB|### 12.5 错误处理
+RT|
+HB|| 错误场景 | HTTP状态码 | 错误信息 |
+QT||----------|------------|----------|
+MZ|| 文章不存在 | 404 | "文章不存在" |
+MZ|| 删除失败 | 500 | "删除操作失败: {detail}" |
+MZ|| 部分批量删除失败 | 200 | 返回失败列表 |
+
+XS|
+XP|**文档版本**: 1.1
 
 **文档版本**: 1.1  
 **状态**: 已更新  

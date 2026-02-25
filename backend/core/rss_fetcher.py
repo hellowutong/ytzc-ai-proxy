@@ -4,6 +4,16 @@ RSS抓取器 - RSS订阅管理、抓取、内容提取
 
 import uuid
 import os
+import logging
+import feedparser
+import httpx
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+from motor.motor_asyncio import AsyncIOMotorClient
+from readability import Document
+import html2text
+
+
 import feedparser
 import httpx
 from datetime import datetime
@@ -50,6 +60,9 @@ class RSSFetcher:
         self._knowledge_manager = knowledge_manager
         self._timeout = timeout
         self._http_client: Optional[httpx.AsyncClient] = None
+        
+        # Logger
+        self.logger = logging.getLogger(__name__)
         
         # 数据库集合
         self._db = mongodb["ai_gateway"]
@@ -748,6 +761,76 @@ class RSSFetcher:
         
         return result.modified_count > 0
     
+    async def delete_article(self, article_id: str) -> bool:
+        """
+        删除单篇文章
+        
+        Args:
+            article_id: 文章ID
+            
+        Returns:
+            是否删除成功
+        """
+        # 先获取文章信息，以便更新订阅源的计数
+        article = await self._articles_collection.find_one({"_id": article_id})
+        if not article:
+            self.logger.warning(f"文章不存在: {article_id}")
+            return False
+        
+        subscription_id = article.get("subscription_id")
+        
+        # 删除文章
+        result = await self._articles_collection.delete_one({"_id": article_id})
+        
+        if result.deleted_count > 0:
+            # 更新订阅源的 article_count
+            if subscription_id:
+                await self._subscriptions_collection.update_one(
+                    {"_id": subscription_id},
+                    {
+                        "$inc": {"article_count": -1},
+                        "$set": {"updated_at": datetime.utcnow()}
+                    }
+                )
+            self.logger.info(f"文章已删除: {article_id}")
+            return True
+        
+        return False
+    
+    async def delete_articles(self, article_ids: List[str]) -> Dict[str, Any]:
+        """
+        批量删除文章
+        
+        Args:
+            article_ids: 文章ID列表
+            
+        Returns:
+            包含成功数、失败数和失败ID的字典
+        """
+        success_count = 0
+        failed_ids = []
+        
+        for article_id in article_ids:
+            try:
+                success = await self.delete_article(article_id)
+                if success:
+                    success_count += 1
+                else:
+                    failed_ids.append(article_id)
+            except Exception as e:
+                self.logger.error(f"删除文章失败 {article_id}: {e}")
+                failed_ids.append(article_id)
+        
+        failed_count = len(failed_ids)
+        
+        self.logger.info(f"批量删除完成: 成功 {success_count}, 失败 {failed_count}")
+        
+        return {
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "failed_ids": failed_ids
+        }
+
     async def close(self):
         """关闭HTTP客户端"""
         if self._http_client and not self._http_client.is_closed:

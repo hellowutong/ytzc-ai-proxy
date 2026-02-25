@@ -62,6 +62,27 @@
           </el-select>
         </div>
         
+        <!-- 批量操作工具栏 -->
+        <div class="batch-toolbar">
+          <el-checkbox 
+            v-model="selectAllChecked" 
+            :indeterminate="isIndeterminate"
+            @change="handleSelectAll"
+            size="small"
+          >
+            全选
+          </el-checkbox>
+          <el-button
+            type="danger"
+            size="small"
+            :disabled="selectedArticles.size === 0"
+            @click="batchDelete"
+          >
+            <el-icon><Delete /></el-icon>
+            批量删除 ({{ selectedArticles.size }})
+          </el-button>
+        </div>
+        
         <div class="list-tabs">
           <span 
             class="tab-item" 
@@ -85,15 +106,32 @@
             v-for="article in filteredArticles"
             :key="article.id"
             class="article-card"
-            :class="{ unread: !article.is_read, active: selectedArticle?.id === article.id }"
+            :class="{ 
+              unread: !article.is_read, 
+              active: selectedArticle?.id === article.id,
+              selected: selectedArticles.has(article.id)
+            }"
             @click="selectArticle(article)"
+            @contextmenu.prevent="showArticleContextMenu($event, article)"
           >
-            <h4 class="article-title">{{ article.title }}</h4>
-            <div class="article-meta">
-              <span class="source">📰 {{ getFeedName(article.subscription_id) }}</span>
-              <span class="time">· {{ formatTime(article.published_at) }}</span>
+            <div class="article-checkbox" @click.stop>
+              <el-checkbox
+                :model-value="selectedArticles.has(article.id)"
+                @change="(val: boolean) => toggleArticleSelection(article.id, val)"
+                size="small"
+              />
             </div>
-            <p class="article-summary">{{ getSummary(article) }}</p>
+            <div class="article-content">
+              <div class="article-header">
+                <span v-if="!article.is_read" class="unread-dot"></span>
+                <h4 class="article-title">{{ article.title }}</h4>
+              </div>
+              <div class="article-meta">
+                <span class="source">📰 {{ getFeedName(article.subscription_id) }}</span>
+                <span class="time">· {{ formatTime(article.published_at) }}</span>
+              </div>
+              <p class="article-summary">{{ getSummary(article) }}</p>
+            </div>
           </div>
           
           <el-empty v-if="filteredArticles.length === 0" description="暂无文章" />
@@ -145,26 +183,37 @@
       @fetch="fetchNow"
     />
     
+    <!-- 文章右键菜单 -->
+    <ArticleContextMenu
+      v-model="articleContextMenuVisible"
+      :position="articleContextMenuPosition"
+      :article="contextMenuArticle"
+      @markRead="handleMarkRead"
+      @markUnread="handleMarkUnread"
+      @copyLink="copyArticleLink"
+      @delete="deleteArticle"
+    />
+    
     <!-- 重命名弹窗 -->
     <RenameFeedDialog
       v-model="showRenameDialog"
       :feed="renameFeedData"
       @confirm="handleRenameConfirm"
     />
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Setting } from '@element-plus/icons-vue'
+import { Plus, Search, Setting, Delete } from '@element-plus/icons-vue'
 import { useRSSStore } from '@/stores'
 import type { RSSFeed, RSSArticle } from '@/types'
 import AddFeedDialog from '@/components/AddFeedDialog.vue'
 import RSSConfigDialog from '@/components/RSSConfigDialog.vue'
 import FeedContextMenu from '@/components/FeedContextMenu.vue'
 import RenameFeedDialog from '@/components/RenameFeedDialog.vue'
+import ArticleContextMenu from '@/components/ArticleContextMenu.vue'
 
 const rssStore = useRSSStore()
 
@@ -180,10 +229,31 @@ const selectedFeed = ref<RSSFeed | null>(null)
 const selectedArticle = ref<RSSArticle | null>(null)
 const articlesLoading = ref(false)
 
-// 右键菜单
+// 批量选择
+const selectedArticles = ref<Set<string>>(new Set())
+
+// 计算属性 - 是否全选
+const selectAllChecked = computed({
+  get: () => filteredArticles.value.length > 0 && filteredArticles.value.every(a => selectedArticles.value.has(a.id)),
+  set: (val: boolean) => handleSelectAll(val)
+})
+
+// 计算属性 - 是否半选
+const isIndeterminate = computed(() => {
+  const selectedCount = filteredArticles.value.filter(a => selectedArticles.value.has(a.id)).length
+  return selectedCount > 0 && selectedCount < filteredArticles.value.length
+})
+
+// 右键菜单 - 订阅源
 const contextMenuVisible = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const contextMenuFeed = ref<RSSFeed | null>(null)
+
+// 右键菜单 - 文章
+const articleContextMenuVisible = ref(false)
+const articleContextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuArticle = ref<RSSArticle | null>(null)
+
 // 重命名弹窗
 const showRenameDialog = ref(false)
 const renameFeedData = ref<RSSFeed | null>(null)
@@ -227,17 +297,13 @@ const filteredArticles = computed(() => {
     const dateB = b.published_at ? new Date(b.published_at).getTime() : 0
     return dateB - dateA
   })
-  return articles.sort((a, b) => {
-    const dateA = a.published_at ? new Date(a.published_at).getTime() : 0
-    const dateB = b.published_at ? new Date(b.published_at).getTime() : 0
-    return dateB - dateA
-  })
 })
 
 // 方法
 const selectFeed = (feed: RSSFeed) => {
   selectedFeed.value = feed
   selectedArticle.value = null
+  selectedArticles.value.clear() // 清除选择
   loadArticles(feed.id)
 }
 
@@ -271,7 +337,7 @@ const getFeedName = (feedId: string) => {
 const getSummary = (article: RSSArticle) => {
   if (!article.content) return ''
   // 去除HTML标签，取前100字符
-  const text = article.content.replace(/<[^>]+>/g, '')
+  const text = article.content.replace(/<[^\u003e]+>/g, '')
   return text.slice(0, 100) + (text.length > 100 ? '...' : '')
 }
 
@@ -300,13 +366,113 @@ const closeReader = () => {
   selectedArticle.value = null
 }
 
-// 右键菜单
+// 批量选择相关
+const toggleArticleSelection = (articleId: string, selected: boolean) => {
+  if (selected) {
+    selectedArticles.value.add(articleId)
+  } else {
+    selectedArticles.value.delete(articleId)
+  }
+}
+
+const handleSelectAll = (val: boolean) => {
+  if (val) {
+    filteredArticles.value.forEach(article => {
+      selectedArticles.value.add(article.id)
+    })
+  } else {
+    selectedArticles.value.clear()
+  }
+}
+
+// 右键菜单 - 订阅源
 const showFeedContextMenu = (e: MouseEvent, feed: RSSFeed) => {
   contextMenuFeed.value = feed
   contextMenuPosition.value = { x: e.clientX, y: e.clientY }
   contextMenuVisible.value = true
 }
 
+// 右键菜单 - 文章
+const showArticleContextMenu = (e: MouseEvent, article: RSSArticle) => {
+  contextMenuArticle.value = article
+  articleContextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  articleContextMenuVisible.value = true
+}
+
+// 文章右键菜单操作
+const handleMarkRead = async (article: RSSArticle) => {
+  if (!article.is_read) {
+    const success = await rssStore.markArticleRead(article.id, true)
+    if (success) {
+      article.is_read = true
+      ElMessage.success('已标记为已读')
+    }
+  }
+}
+
+const handleMarkUnread = async (article: RSSArticle) => {
+  if (article.is_read) {
+    const success = await rssStore.markArticleRead(article.id, false)
+    if (success) {
+      article.is_read = false
+      ElMessage.success('已标记为未读')
+    }
+  }
+}
+
+const copyArticleLink = (article: RSSArticle) => {
+  if (article.link) {
+    navigator.clipboard.writeText(article.link).then(() => {
+      ElMessage.success('链接已复制')
+    }).catch(() => {
+      ElMessage.error('复制失败')
+    })
+  }
+}
+
+const deleteArticle = async (article: RSSArticle) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除文章 "${article.title}" 吗？`, '确认删除')
+    const success = await rssStore.deleteArticle(article.id)
+    if (success) {
+      ElMessage.success('删除成功')
+      // 如果删除的是当前正在阅读的文章，清空阅读区
+      if (selectedArticle.value?.id === article.id) {
+        selectedArticle.value = null
+      }
+      // 从选中列表中移除
+      selectedArticles.value.delete(article.id)
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+const batchDelete = async () => {
+  const ids = Array.from(selectedArticles.value)
+  if (ids.length === 0) return
+  
+  try {
+    await ElMessageBox.confirm(`确定要删除选中的 ${ids.length} 篇文章吗？`, '确认批量删除')
+    const result = await rssStore.batchDeleteArticles(ids)
+    if (result.success) {
+      ElMessage.success(`成功删除 ${result.count} 篇文章`)
+      selectedArticles.value.clear()
+      // 如果删除的文章包含当前正在阅读的，清空阅读区
+      if (selectedArticle.value && ids.includes(selectedArticle.value.id)) {
+        selectedArticle.value = null
+      }
+    } else {
+      ElMessage.error('批量删除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+// 订阅源操作
 const renameFeed = (feed: RSSFeed) => {
   renameFeedData.value = feed
   showRenameDialog.value = true
@@ -358,6 +524,7 @@ const handleAddFeed = async (feedData: { name: string; url: string }) => {
     ElMessage.error('创建失败')
   }
 }
+
 const handleRenameConfirm = async (feedId: string, newName: string) => {
   const success = await rssStore.updateFeed(feedId, { name: newName })
   if (success) {
@@ -371,9 +538,32 @@ const handleRenameConfirm = async (feedId: string, newName: string) => {
   }
 }
 
+// 键盘快捷键
+const handleKeyDown = (e: KeyboardEvent) => {
+  // Delete键删除选中的文章
+  if (e.key === 'Delete' && selectedArticles.value.size > 0) {
+    batchDelete()
+  }
+  // Ctrl+A 全选
+  if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    handleSelectAll(true)
+  }
+  // Space 切换当前选中文章的选中状态
+  if (e.key === ' ' && selectedArticle.value) {
+    e.preventDefault()
+    toggleArticleSelection(selectedArticle.value.id, !selectedArticles.value.has(selectedArticle.value.id))
+  }
+}
+
 onMounted(() => {
   rssStore.fetchFeeds()
   loadArticles()
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
@@ -486,6 +676,16 @@ onMounted(() => {
   width: 100px;
 }
 
+/* 批量操作工具栏 */
+.batch-toolbar {
+  padding: 8px 12px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #252526;
+}
+
 .list-tabs {
   display: flex;
   padding: 8px 12px;
@@ -526,11 +726,14 @@ onMounted(() => {
 }
 
 .article-card {
-  padding: 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid #333;
   cursor: pointer;
   transition: background 0.2s ease;
   border-left: 3px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .article-card:hover {
@@ -542,6 +745,10 @@ onMounted(() => {
   border-left-color: #007acc;
 }
 
+.article-card.selected {
+  background: #1e3a5f;
+}
+
 .article-card.unread {
   border-left-color: #007acc;
 }
@@ -550,15 +757,41 @@ onMounted(() => {
   color: #ffffff;
 }
 
+.article-checkbox {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.article-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.article-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #007acc;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .article-title {
   font-size: 14px;
   font-weight: 500;
   color: #858585;
-  margin: 0 0 8px 0;
+  margin: 0;
   line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 
 .article-meta {
@@ -676,5 +909,21 @@ onMounted(() => {
 
 :deep(.el-select .el-input__wrapper) {
   background: #3c3c3c !important;
+}
+
+/* 深色主题复选框 */
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: #007acc;
+  border-color: #007acc;
+}
+
+:deep(.el-checkbox__inner) {
+  background-color: #3c3c3c;
+  border-color: #555;
+}
+
+:deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background-color: #007acc;
+  border-color: #007acc;
 }
 </style>
