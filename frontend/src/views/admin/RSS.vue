@@ -138,29 +138,156 @@
         </div>
       </div>
 
-      <!-- 右侧：文章阅读区 -->
+      <!-- 右侧：文章阅读区/AI对话区 -->
       <div class="article-reader" v-if="selectedArticle">
-        <div class="reader-header">
-          <div class="feed-tag">📰 {{ getFeedName(selectedArticle.subscription_id) }}</div>
-          <h2 class="reader-title">{{ selectedArticle.title }}</h2>
-          <div class="reader-meta">
-            <span>👤 {{ selectedArticle.author || '未知作者' }}</span>
-            <span>·</span>
-            <span>⏰ {{ formatFullTime(selectedArticle.published_at) }}</span>
+        <!-- 标签栏 -->
+        <div class="tab-bar">
+          <div 
+            class="tab-item" 
+            :class="{ active: activeTab === 'article' }"
+            @click="activeTab = 'article'"
+          >
+            📖 文章
+          </div>
+          <div 
+            class="tab-item" 
+            :class="{ active: activeTab === 'chat' }"
+            @click="activeTab = 'chat'"
+          >
+            🤖 AI对话
+          </div>
+          <div class="tab-actions">
+            <el-button v-if="activeTab === 'article'" size="small" @click="startAIChat">
+              <el-icon><ChatDotRound /></el-icon>与AI对话
+            </el-button>
           </div>
         </div>
-        
-        <div class="reader-content" v-html="selectedArticle.content"></div>
-        
-        <div class="reader-footer">
-          <el-button @click="closeReader">❌ 关闭</el-button>
+
+        <!-- 文章内容 -->
+        <div v-show="activeTab === 'article'" class="reader-content-wrapper">
+          <div class="reader-header">
+            <div class="feed-tag">📰 {{ getFeedName(selectedArticle.subscription_id) }}</div>
+            <h2 class="reader-title">{{ selectedArticle.title }}</h2>
+            <div class="reader-meta">
+              <span>👤 {{ selectedArticle.author || '未知作者' }}</span>
+              <span>·</span>
+              <span>⏰ {{ formatFullTime(selectedArticle.published_at) }}</span>
+            </div>
+          </div>
+          
+          <div class="reader-content" v-html="selectedArticle.content"></div>
+          
+          <div class="reader-footer">
+            <el-button @click="closeReader">❌ 关闭</el-button>
+          </div>
+        </div>
+
+        <!-- AI对话区 -->
+        <div v-show="activeTab === 'chat'" class="chat-area">
+          <!-- 模型选择 -->
+          <div class="chat-header">
+            <div class="model-selector">
+              <span>模型:</span>
+              <el-select v-model="selectedModel" size="small" style="width: 150px;">
+                <el-option
+                  v-for="model in modelStore.enabledModels"
+                  :key="model.name"
+                  :label="model.name"
+                  :value="model.name"
+                />
+              </el-select>
+            </div>
+            <div class="chat-actions">
+              <el-button size="small" @click="chatStore.clearCurrentConversation()">清空对话</el-button>
+            </div>
+          </div>
+
+          <!-- 上下文横幅 -->
+          <div class="context-banner">
+            <div class="context-title">📄 当前上下文: 《{{ selectedArticle.title }}》</div>
+            <div class="context-meta">来源: {{ getFeedName(selectedArticle.subscription_id) }} | {{ formatFullTime(selectedArticle.published_at) }}</div>
+          </div>
+
+          <!-- 快捷操作 -->
+          <div class="quick-actions">
+            <el-button size="small" @click="handleQuickAction('summarize')" :loading="isLoadingChat">📋 总结</el-button>
+            <el-button size="small" @click="handleQuickAction('translate')" :loading="isLoadingChat">🌐 翻译</el-button>
+            <el-button size="small" @click="handleQuickAction('keypoints')" :loading="isLoadingChat">🎯 关键点</el-button>
+          </div>
+
+          <!-- 消息区域 -->
+          <div class="messages-area" ref="messagesContainer">
+            <div v-if="!currentArticleConversation?.messages?.length" class="empty-chat">
+              <p>💬 点击下方快捷按钮或输入问题开始对话</p>
+            </div>
+            <template v-else>
+              <div
+                v-for="(msg, index) in currentArticleConversation.messages"
+                :key="index"
+                class="message"
+                :class="msg.role"
+              >
+                <div class="message-avatar">
+                  {{ msg.role === 'user' ? '👤' : '🤖' }}
+                </div>
+                <div class="message-content">
+                  <div class="message-bubble">{{ msg.content }}</div>
+                  <div v-if="msg.timestamp" class="message-time">
+                    {{ new Date(msg.timestamp).toLocaleTimeString('zh-CN') }}
+                  </div>
+                </div>
+              </div>
+              <div v-if="chatStore.isStreaming" class="message assistant">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                  <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- 输入区域 -->
+          <div class="input-area">
+            <div class="input-wrapper">
+              <el-input
+                v-model="chatInput"
+                type="textarea"
+                :rows="2"
+                placeholder="输入问题... (Enter发送, Shift+Enter换行)"
+                @keydown.enter.exact.prevent="handleSendMessage"
+                resize="none"
+              />
+              <div class="input-actions">
+                <el-button
+                  v-if="chatStore.isStreaming"
+                  type="danger"
+                  size="small"
+                  @click="chatStore.stopStreaming"
+                >
+                  停止
+                </el-button>
+                <el-button
+                  v-else
+                  type="primary"
+                  size="small"
+                  :disabled="!chatInput.trim()"
+                  @click="handleSendMessage"
+                >
+                  发送
+                </el-button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
       <div class="article-reader empty" v-else>
         <el-empty description="选择一篇文章开始阅读" />
       </div>
-    </div>
 
     <!-- 添加订阅弹窗 -->
     <AddFeedDialog
@@ -204,6 +331,20 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search, Setting, Delete, ChatDotRound } from '@element-plus/icons-vue'
+import { useRSSStore, useChatStore, useModelStore } from '@/stores'
+import type { RSSFeed, RSSArticle } from '@/types'
+import AddFeedDialog from '@/components/AddFeedDialog.vue'
+import RSSConfigDialog from '@/components/RSSConfigDialog.vue'
+import FeedContextMenu from '@/components/FeedContextMenu.vue'
+import RenameFeedDialog from '@/components/RenameFeedDialog.vue'
+import ArticleContextMenu from '@/components/ArticleContextMenu.vue'
+
+const rssStore = useRSSStore()
+const chatStore = useChatStore()
+const modelStore = useModelStore()
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Setting, Delete } from '@element-plus/icons-vue'
@@ -258,6 +399,18 @@ const contextMenuArticle = ref<RSSArticle | null>(null)
 const showRenameDialog = ref(false)
 const renameFeedData = ref<RSSFeed | null>(null)
 
+const chatInput = ref('')
+
+// AI对话相关
+const activeTab = ref<'article' | 'chat'>('article')
+const selectedModel = ref('demo1')
+const isLoadingChat = ref(false)
+
+// 计算属性 - 当前文章的对话
+const currentArticleConversation = computed(() => {
+  if (!selectedArticle.value) return null
+  return chatStore.getConversationByArticleId(selectedArticle.value.id)
+})
 // 计算属性
 const feeds = computed(() => rssStore.feeds.map(f => ({
   ...f,
@@ -536,6 +689,63 @@ const handleRenameConfirm = async (feedId: string, newName: string) => {
   } else {
     ElMessage.error('重命名失败')
   }
+}
+
+// AI对话相关方法
+const startAIChat = async () => {
+  if (!selectedArticle.value) return
+  
+  activeTab.value = 'chat'
+  
+  // 检查是否已有对话
+  const existingConv = chatStore.getConversationByArticleId(selectedArticle.value.id)
+  if (!existingConv) {
+    isLoadingChat.value = true
+    try {
+      const model = selectedModel.value || selectedArticle.value.virtual_model || 'demo1'
+      await chatStore.createRSSConversation(selectedArticle.value, model)
+      ElMessage.success('AI对话已启动')
+    } catch (error) {
+      ElMessage.error('启动AI对话失败')
+    } finally {
+      isLoadingChat.value = false
+    }
+  }
+}
+
+const handleQuickAction = async (action: 'summarize' | 'translate' | 'keypoints') => {
+  if (!selectedArticle.value) return
+  
+  activeTab.value = 'chat'
+  isLoadingChat.value = true
+  try {
+    await chatStore.executeQuickAction(action, selectedArticle.value)
+  } catch (error) {
+    ElMessage.error('操作失败')
+  } finally {
+    isLoadingChat.value = false
+  }
+}
+
+const sendChatMessage = async (content: string) => {
+  if (!content.trim() || !selectedArticle.value) return
+  
+  // 确保有对话
+  if (!chatStore.currentConversation) {
+    await startAIChat()
+  }
+  
+  const model = chatStore.currentConversation?.model || selectedModel.value
+  await chatStore.sendMessage(content, model)
+  await chatStore.sendMessage(content, model)
+}
+
+const handleSendMessage = async () => {
+  const content = chatInput.value
+  if (!content.trim()) return
+  
+  chatInput.value = ''
+  await sendChatMessage(content)
 }
 
 // 键盘快捷键
@@ -925,5 +1135,201 @@ onUnmounted(() => {
 :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
   background-color: #007acc;
   border-color: #007acc;
+}
+/* AI对话区样式 */
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid #333;
+  background: #1e1e1e;
+  padding: 0 16px;
+}
+
+.tab-item {
+  padding: 12px 20px;
+  cursor: pointer;
+  color: #858585;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tab-item:hover {
+  color: #cccccc;
+}
+
+.tab-item.active {
+  color: #007acc;
+  border-bottom-color: #007acc;
+}
+
+.tab-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.reader-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 45px);
+  overflow: hidden;
+}
+
+.chat-area {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 45px);
+  background: #1e1e1e;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+}
+
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #cccccc;
+}
+
+.context-banner {
+  background: #252526;
+  border-left: 3px solid #007acc;
+  padding: 12px 16px;
+  margin: 8px 16px;
+  border-radius: 0 4px 4px 0;
+}
+
+.context-title {
+  color: #cccccc;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.context-meta {
+  color: #858585;
+  font-size: 12px;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333;
+}
+
+.messages-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.empty-chat {
+  text-align: center;
+  color: #858585;
+  padding: 40px;
+}
+
+.message {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.message.user {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.message-content {
+  max-width: 70%;
+}
+
+.message-bubble {
+  padding: 12px 16px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+.message.user .message-bubble {
+  background: #264f78;
+  color: #ffffff;
+  border-radius: 8px 8px 0 8px;
+}
+
+.message.assistant .message-bubble {
+  background: #252526;
+  color: #cccccc;
+  border-left: 3px solid #007acc;
+  border-radius: 8px 8px 8px 0;
+}
+
+.message-time {
+  font-size: 12px;
+  color: #858585;
+  margin-top: 4px;
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 12px;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: #858585;
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+.input-area {
+  padding: 12px 16px;
+  border-top: 1px solid #333;
+  background: #252526;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.el-textarea__inner) {
+  background: #3c3c3c !important;
+  color: #cccccc !important;
+  border: 1px solid #454545 !important;
 }
 </style>
