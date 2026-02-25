@@ -60,73 +60,23 @@ export const useChatStore = defineStore('chat', () => {
 
   async function createConversation(model: string, metadata?: Record<string, any>) {
     try {
-      // 先创建后端对话
       const response = await fetch('/admin/ai/v1/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, metadata })
       })
-      const result = await response.json()
       
+      const result = await response.json()
       if (result.code === 200) {
-        // 检查是否已存在相同ID的对话
-        const existingIndex = conversations.value.findIndex(
-          c => c.id === result.data.id
-        )
-        
-        if (existingIndex !== -1) {
-          // 已存在，直接使用已有对话，不创建新的
-          currentConversation.value = conversations.value[existingIndex]
-          return conversations.value[existingIndex]
-        }
-        
-        // 创建新对话
         const newConversation: Conversation = {
           id: result.data.id,
           model,
           messages: [],
-          metadata: result.data.metadata,  // 保存metadata
+          metadata: result.data.metadata,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
-        conversations.value.unshift(newConversation)
-        currentConversation.value = newConversation
-        return newConversation
-      }
-    } catch (error) {
-      console.error('Failed to create conversation:', error)
-    }
-    return null
-  }
-    try {
-      // 先创建后端对话
-      const response = await fetch('/admin/ai/v1/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model })
-      })
-      const result = await response.json()
-      
-      if (result.code === 200) {
-        // 检查是否已存在相同ID的对话
-        const existingIndex = conversations.value.findIndex(
-          c => c.id === result.data.id
-        )
         
-        if (existingIndex !== -1) {
-          // 已存在，直接使用已有对话，不创建新的
-          currentConversation.value = conversations.value[existingIndex]
-          return conversations.value[existingIndex]
-        }
-        
-        // 创建新对话
-        const newConversation: Conversation = {
-          id: result.data.id,
-          model,
-          messages: [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
         conversations.value.unshift(newConversation)
         currentConversation.value = newConversation
         return newConversation
@@ -142,9 +92,6 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendMessage(content: string, model: string) {
-    // 注意：createConversation 应该由调用方在发送消息前确保调用
-    // 这里不再自动创建对话，避免重复创建
-
     const userMessage: Message = {
       role: 'user',
       content,
@@ -156,7 +103,6 @@ export const useChatStore = defineStore('chat', () => {
     try {
       isStreaming.value = true
 
-      // 获取当前模型的 proxy_key 用于认证
       const modelStore = useModelStore()
       const currentVm = modelStore.models.find(m => m.name === model)
       const proxyKey = currentVm?.proxy_key || ''
@@ -172,90 +118,38 @@ export const useChatStore = defineStore('chat', () => {
           messages: currentConversation.value?.messages || [],
           conversation_id: currentConversation.value?.id || null,
           temperature: settings.value.temperature,
-          max_tokens: settings.value.max_tokens,
-          // 强制使用非流式（后端已统一为非流式响应）
-          // stream: settings.value.stream
+          max_tokens: settings.value.max_tokens
         })
       })
 
-      // 检查Content-Type判断响应格式
       const contentType = response.headers.get('content-type') || ''
       const isJsonResponse = contentType.includes('application/json')
 
       if (isJsonResponse) {
-        // 非流式响应 - 解析JSON
         const result = await response.json()
-
-        // 检查是否是错误响应
+        
         if (result.error) {
-          const errorMessage: Message = {
-            role: 'assistant',
-            content: result.error.message || '抱歉，处理您的请求时出现了错误。',
-            timestamp: new Date().toISOString()
-          }
-          currentConversation.value?.messages.push(errorMessage)
-        } else {
-          // 正常响应
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: result.choices?.[0]?.message?.content || '',
-            timestamp: new Date().toISOString()
-          }
-          currentConversation.value?.messages.push(assistantMessage)
+          throw new Error(result.error.message || '请求失败')
         }
-      } else {
-        // 流式响应 (SSE) - 兼容旧版行为
-        const reader = response.body?.getReader()
-        const decoder = new TextDecoder()
-        let assistantContent = ''
 
         const assistantMessage: Message = {
           role: 'assistant',
-          content: '',
+          content: result.choices?.[0]?.message?.content || '无响应内容',
           timestamp: new Date().toISOString()
         }
+
         currentConversation.value?.messages.push(assistantMessage)
-
-        while (reader) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n')
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
-              if (data === '[DONE]') continue
-
-              try {
-                const parsed = JSON.parse(data)
-                const delta = parsed.choices?.[0]?.delta?.content
-                if (delta) {
-                  assistantContent += delta
-                  assistantMessage.content = assistantContent
-                }
-              } catch (e) {
-                // Ignore parse errors
-              }
-            }
-          }
-        }
+        await saveConversation(currentConversation.value)
+      } else {
+        const errorText = await response.text()
+        throw new Error(`服务器返回非JSON格式: ${errorText.substring(0, 100)}`)
       }
-
-      if (currentConversation.value) {
-        currentConversation.value.updated_at = new Date().toISOString()
-      }
-
-      // 刷新模型数据以获取最新的 current 值（关键词切换后需要更新显示）
-      await modelStore.fetchModels()
-
-    } catch (error) {
-      console.error('Failed to send message:', error)
-      // 添加错误消息到对话
+    } catch (error: any) {
+      console.error('发送消息失败:', error)
+      
       const errorMessage: Message = {
         role: 'assistant',
-        content: '抱歉，发生了错误，请稍后重试。',
+        content: `抱歉，发生了错误: ${error.message || '未知错误'}`,
         timestamp: new Date().toISOString()
       }
       currentConversation.value?.messages.push(errorMessage)
@@ -268,7 +162,6 @@ export const useChatStore = defineStore('chat', () => {
     if (!conversation) return
     
     try {
-      // 确保对话有ID
       if (!conversation.id) {
         console.error('尝试保存没有ID的对话')
         return
@@ -283,7 +176,6 @@ export const useChatStore = defineStore('chat', () => {
         })
       })
       
-      // 如果405或404错误，静默处理（可能是旧版本后端）
       if (!response.ok) {
         console.warn(`保存对话失败: ${response.status}`)
         return
@@ -292,14 +184,11 @@ export const useChatStore = defineStore('chat', () => {
       const result = await response.json()
       if (result.code === 200) {
         console.log('对话保存成功')
-        // 不自动刷新对话列表，避免竞态条件和引用丢失
-        // 只更新本地时间戳
         if (currentConversation.value) {
           currentConversation.value.updated_at = new Date().toISOString()
         }
       }
     } catch (error) {
-      // 静默处理保存失败，不显示错误给用户
       console.warn('保存对话失败:', error)
     }
   }
@@ -316,6 +205,8 @@ export const useChatStore = defineStore('chat', () => {
     if (currentConversation.value) {
       currentConversation.value.messages = []
     }
+  }
+
   // RSS文章相关方法
   async function createRSSConversation(article: any, model: string) {
     const metadata = {
@@ -328,7 +219,6 @@ export const useChatStore = defineStore('chat', () => {
     
     const conversation = await createConversation(model, metadata)
     if (conversation) {
-      // 自动发送system message加载文章内容
       const systemContent = buildArticleContext(article)
       const systemMessage: Message = {
         role: 'system',
@@ -338,6 +228,7 @@ export const useChatStore = defineStore('chat', () => {
       conversation.messages.push(systemMessage)
       await saveConversation(conversation)
     }
+    
     return conversation
   }
 
@@ -353,14 +244,12 @@ export const useChatStore = defineStore('chat', () => {
       keypoints: '请提取这篇文章的3-5个关键要点，用bullet points形式列出。'
     }
     
-    // 确保有当前对话
     if (!currentConversation.value) {
       const model = article.virtual_model || 'demo1'
       await createRSSConversation(article, model)
     }
     
     if (currentConversation.value) {
-      // 发送快捷操作消息
       const model = currentConversation.value.model
       await sendMessage(prompts[action], model)
     }
@@ -389,3 +278,4 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     clearCurrentConversation
   }
+})

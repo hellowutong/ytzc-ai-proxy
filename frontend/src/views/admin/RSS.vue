@@ -328,6 +328,7 @@
       @confirm="handleRenameConfirm"
     />
   </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -345,18 +346,6 @@ import ArticleContextMenu from '@/components/ArticleContextMenu.vue'
 const rssStore = useRSSStore()
 const chatStore = useChatStore()
 const modelStore = useModelStore()
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Setting, Delete } from '@element-plus/icons-vue'
-import { useRSSStore } from '@/stores'
-import type { RSSFeed, RSSArticle } from '@/types'
-import AddFeedDialog from '@/components/AddFeedDialog.vue'
-import RSSConfigDialog from '@/components/RSSConfigDialog.vue'
-import FeedContextMenu from '@/components/FeedContextMenu.vue'
-import RenameFeedDialog from '@/components/RenameFeedDialog.vue'
-import ArticleContextMenu from '@/components/ArticleContextMenu.vue'
-
-const rssStore = useRSSStore()
 
 // 布局
 const sidebarWidth = ref(240)
