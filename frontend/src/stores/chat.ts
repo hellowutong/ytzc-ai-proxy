@@ -379,9 +379,9 @@ export const useChatStore = defineStore('chat', () => {
     settings,
     fetchConversations,
     createConversation,
-    createRSSConversation,     // 新增
-    executeQuickAction,        // 新增
-    getConversationByArticleId, // 新增
+    createRSSConversation,
+    executeQuickAction,
+    getConversationByArticleId,
     setCurrentConversation,
     sendMessage,
     saveConversation,
@@ -389,19 +389,3 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     clearCurrentConversation
   }
-
-  return {
-    conversations,
-    currentConversation,
-    isStreaming,
-    settings,
-    fetchConversations,
-    createConversation,
-    setCurrentConversation,
-    sendMessage,
-    saveConversation,
-    stopStreaming,
-    updateSettings,
-    clearCurrentConversation
-  }
-})

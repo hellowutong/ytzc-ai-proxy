@@ -1,7 +1,11 @@
 {
   "active_plan": "D:\\aiproject\\ytzc-ai-proxy\\.sisyphus\\plans\\fix-skill-editor-crash.md",
   "started_at": "2026-02-23T09:17:58.127Z",
-  "session_ids": ["ses_37803da0fffeShE6W0sMNwDTWj"],
+  "session_ids": [
+    "ses_37803da0fffeShE6W0sMNwDTWj",
+    "ses_36cd2f2e3ffelhxarbERwDUDuG",
+    "ses_36cadb602ffev30785mqeMJsZR"
+  ],
   "plan_name": "fix-skill-editor-crash",
   "agent": "atlas"
 }

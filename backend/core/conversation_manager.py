@@ -422,14 +422,6 @@ class ConversationManager:
                 has_knowledge_reference=doc.get("has_knowledge_reference", False),
                 metadata=doc.get("metadata")  # 新增: 返回metadata
             )
-                id=self._convert_id_to_string(doc["_id"]),
-                virtual_model=doc.get("virtual_model", ""),
-                messages=messages,
-                created_at=doc.get("created_at", datetime.utcnow()),
-                updated_at=doc.get("updated_at", datetime.utcnow()),
-                message_count=doc.get("message_count", 0),
-                has_knowledge_reference=doc.get("has_knowledge_reference", False)
-            )
             
         except Exception as e:
             logger.error(f"获取会话失败: {e}")
@@ -508,15 +500,9 @@ class ConversationManager:
                     message_count=doc.get("message_count", 0),
                     has_knowledge_reference=doc.get("has_knowledge_reference", False),
                     metadata=doc.get("metadata")  # 新增: 返回metadata
-                ))
-                    id=self._convert_id_to_string(doc["_id"]),
-                    virtual_model=doc.get("virtual_model", ""),
-                    messages=messages,  # 返回最近5条消息用于预览
-                    created_at=doc.get("created_at", datetime.utcnow()),
-                    updated_at=doc.get("updated_at", datetime.utcnow()),
-                    message_count=doc.get("message_count", 0),
-                    has_knowledge_reference=doc.get("has_knowledge_reference", False)
-                ))
+            ))
+
+            # 获取总数
             
             # 获取总数
             total = await self._collection.count_documents(query)
