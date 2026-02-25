@@ -1108,12 +1108,12 @@ onUnmounted(() => {
 }
 
 .chat-area {
-  width: 350px;
-  min-width: 320px;
+  flex: 1;
   background: #1e1e1e;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 300px;
 }
 
 .chat-header {
