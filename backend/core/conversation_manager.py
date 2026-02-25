@@ -33,7 +33,7 @@ class Conversation:
     updated_at: datetime = field(default_factory=datetime.utcnow)
     message_count: int = 0
     has_knowledge_reference: bool = False
-
+    metadata: Optional[Dict[str, Any]] = None  # 新增: 对话元数据
 
 class ConversationManager:
     """对话管理器"""
@@ -91,7 +91,48 @@ class ConversationManager:
         """生成UUID"""
         return str(uuid.uuid4())
     
-    async def create_conversation(self, virtual_model: str) -> str:
+    async def create_conversation(self, virtual_model: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """
+        创建新会话
+        
+        Args:
+            virtual_model: 虚拟模型名称
+            metadata: 可选的会话元数据(用于RSS文章关联等场景)
+            
+        Returns:
+            str: 新创建的会话ID
+        """
+        try:
+            conversation_id = self._generate_uuid()
+            now = datetime.utcnow()
+            
+            doc = {
+                "_id": conversation_id,
+                "virtual_model": virtual_model,
+                "messages": [],
+                "created_at": now,
+                "updated_at": now,
+                "message_count": 0,
+                "has_knowledge_reference": False
+            }
+            
+            # 新增: 存储metadata
+            if metadata:
+                doc["metadata"] = metadata
+            
+            await self._collection.insert_one(doc)
+            logger.info(f"创建会话成功: {conversation_id}, 虚拟模型: {virtual_model}")
+            
+            # 同时在Redis中创建会话缓存
+            if self._redis:
+                cache_key = f"conversation:{conversation_id}:messages"
+                await self._redis.setex(cache_key, 3600, "[]")  # 1小时过期
+            
+            return conversation_id
+            
+        except Exception as e:
+            logger.error(f"创建会话失败: {e}")
+            raise
         """
         创建新会话
         
@@ -378,6 +419,15 @@ class ConversationManager:
                 created_at=doc.get("created_at", datetime.utcnow()),
                 updated_at=doc.get("updated_at", datetime.utcnow()),
                 message_count=doc.get("message_count", 0),
+                has_knowledge_reference=doc.get("has_knowledge_reference", False),
+                metadata=doc.get("metadata")  # 新增: 返回metadata
+            )
+                id=self._convert_id_to_string(doc["_id"]),
+                virtual_model=doc.get("virtual_model", ""),
+                messages=messages,
+                created_at=doc.get("created_at", datetime.utcnow()),
+                updated_at=doc.get("updated_at", datetime.utcnow()),
+                message_count=doc.get("message_count", 0),
                 has_knowledge_reference=doc.get("has_knowledge_reference", False)
             )
             
@@ -450,6 +500,15 @@ class ConversationManager:
                     ))
                 
                 conversations.append(Conversation(
+                    id=self._convert_id_to_string(doc["_id"]),
+                    virtual_model=doc.get("virtual_model", ""),
+                    messages=messages,  # 返回最近5条消息用于预览
+                    created_at=doc.get("created_at", datetime.utcnow()),
+                    updated_at=doc.get("updated_at", datetime.utcnow()),
+                    message_count=doc.get("message_count", 0),
+                    has_knowledge_reference=doc.get("has_knowledge_reference", False),
+                    metadata=doc.get("metadata")  # 新增: 返回metadata
+                ))
                     id=self._convert_id_to_string(doc["_id"]),
                     virtual_model=doc.get("virtual_model", ""),
                     messages=messages,  # 返回最近5条消息用于预览

@@ -88,6 +88,14 @@ export interface Conversation {
   messages: Message[]
   created_at: string
   updated_at: string
+  metadata?: {                    // 新增: 对话元数据
+    source?: 'webchat' | 'rss'
+    title?: string
+    article_id?: string
+    article_title?: string
+    feed_id?: string
+    feed_name?: string
+  }
 }
 
 export interface Message {

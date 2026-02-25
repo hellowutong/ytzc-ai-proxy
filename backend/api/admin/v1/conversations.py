@@ -3,7 +3,7 @@
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -11,6 +11,12 @@ from api.dependencies import get_conversation_manager
 from core.conversation_manager import ConversationManager
 
 router = APIRouter()
+
+
+class CreateConversationRequest(BaseModel):
+    """创建对话请求"""
+    model: str
+    metadata: Optional[Dict[str, Any]] = None  # 新增: 对话元数据
 
 
 @router.get("/conversations")
@@ -45,7 +51,8 @@ async def get_conversations(
                     ],
                     "message_count": conv.message_count,
                     "created_at": conv.created_at.isoformat() if isinstance(conv.created_at, datetime) else str(conv.created_at),
-                    "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at)
+                    "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at),
+                    "metadata": conv.metadata  # 新增: 返回metadata
                 }
                 for conv in conversations
             ],
@@ -120,23 +127,31 @@ async def get_conversation(
                 for msg in conv.messages
             ],
             "created_at": conv.created_at.isoformat() if isinstance(conv.created_at, datetime) else str(conv.created_at),
-            "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at)
+            "updated_at": conv.updated_at.isoformat() if isinstance(conv.updated_at, datetime) else str(conv.updated_at),
+            "metadata": conv.metadata  # 新增: 返回metadata
         }
     }
 
 
 @router.post("/conversations")
 async def create_conversation(
-    body: dict,
+    request: CreateConversationRequest,
     conversation_manager: ConversationManager = Depends(get_conversation_manager)
 ):
     """创建新对话"""
-    model = body.get("model", "")
-    conversation_id = await conversation_manager.create_conversation(model)
+    conversation_id = await conversation_manager.create_conversation(
+        virtual_model=request.model,
+        metadata=request.metadata  # 新增: 传递metadata
+    )
+    
     return {
         "code": 200,
         "message": "对话创建成功",
-        "data": {"id": conversation_id}
+        "data": {
+            "id": conversation_id,
+            "model": request.model,
+            "metadata": request.metadata  # 返回metadata
+        }
     }
 
 

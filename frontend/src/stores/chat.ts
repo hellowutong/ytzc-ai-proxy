@@ -58,7 +58,46 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function createConversation(model: string) {
+  async function createConversation(model: string, metadata?: Record<string, any>) {
+    try {
+      // 先创建后端对话
+      const response = await fetch('/admin/ai/v1/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, metadata })
+      })
+      const result = await response.json()
+      
+      if (result.code === 200) {
+        // 检查是否已存在相同ID的对话
+        const existingIndex = conversations.value.findIndex(
+          c => c.id === result.data.id
+        )
+        
+        if (existingIndex !== -1) {
+          // 已存在，直接使用已有对话，不创建新的
+          currentConversation.value = conversations.value[existingIndex]
+          return conversations.value[existingIndex]
+        }
+        
+        // 创建新对话
+        const newConversation: Conversation = {
+          id: result.data.id,
+          model,
+          messages: [],
+          metadata: result.data.metadata,  // 保存metadata
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        conversations.value.unshift(newConversation)
+        currentConversation.value = newConversation
+        return newConversation
+      }
+    } catch (error) {
+      console.error('Failed to create conversation:', error)
+    }
+    return null
+  }
     try {
       // 先创建后端对话
       const response = await fetch('/admin/ai/v1/conversations', {
@@ -277,6 +316,78 @@ export const useChatStore = defineStore('chat', () => {
     if (currentConversation.value) {
       currentConversation.value.messages = []
     }
+  // RSS文章相关方法
+  async function createRSSConversation(article: any, model: string) {
+    const metadata = {
+      source: 'rss',
+      title: article.title,
+      article_id: article.id,
+      article_title: article.title,
+      feed_id: article.subscription_id
+    }
+    
+    const conversation = await createConversation(model, metadata)
+    if (conversation) {
+      // 自动发送system message加载文章内容
+      const systemContent = buildArticleContext(article)
+      const systemMessage: Message = {
+        role: 'system',
+        content: systemContent,
+        timestamp: new Date().toISOString()
+      }
+      conversation.messages.push(systemMessage)
+      await saveConversation(conversation)
+    }
+    return conversation
+  }
+
+  function buildArticleContext(article: any): string {
+    const content = article.content?.slice(0, 3000) || ''
+    return `你正在阅读一篇RSS文章。请基于以下内容回答用户问题。\n\n文章标题: ${article.title}\n文章来源: ${article.feed_name || '未知'}\n发布时间: ${article.published_at || '未知'}\n\n文章内容:\n${content}`
+  }
+
+  async function executeQuickAction(action: 'summarize' | 'translate' | 'keypoints', article: any) {
+    const prompts = {
+      summarize: '请用中文总结这篇文章的主要内容，不超过200字。',
+      translate: '请将这篇文章翻译成英文，保留原文格式和段落结构。',
+      keypoints: '请提取这篇文章的3-5个关键要点，用bullet points形式列出。'
+    }
+    
+    // 确保有当前对话
+    if (!currentConversation.value) {
+      const model = article.virtual_model || 'demo1'
+      await createRSSConversation(article, model)
+    }
+    
+    if (currentConversation.value) {
+      // 发送快捷操作消息
+      const model = currentConversation.value.model
+      await sendMessage(prompts[action], model)
+    }
+  }
+
+  function getConversationByArticleId(articleId: string): Conversation | undefined {
+    return conversations.value.find(
+      c => c.metadata?.source === 'rss' && c.metadata?.article_id === articleId
+    )
+  }
+
+  return {
+    conversations,
+    currentConversation,
+    isStreaming,
+    settings,
+    fetchConversations,
+    createConversation,
+    createRSSConversation,     // 新增
+    executeQuickAction,        // 新增
+    getConversationByArticleId, // 新增
+    setCurrentConversation,
+    sendMessage,
+    saveConversation,
+    stopStreaming,
+    updateSettings,
+    clearCurrentConversation
   }
 
   return {
