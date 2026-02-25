@@ -1637,7 +1637,90 @@ Authorization: Bearer {proxy_key}
 
 ### 2.5 对话历史
 
-#### 2.5.1 列表
+#### 2.5.1 创建对话
+
+**POST** `/admin/ai/v1/conversations`
+
+**请求体**:
+```json
+{
+  "model": "demo1",                    // 必需: 虚拟模型名称
+  "metadata": {                        // 可选: 对话元数据
+    "source": "webchat" | "rss",       // 来源类型
+    "title": "对话标题",                // 可选: 自定义标题
+    "article_id": "article_uuid",      // RSS场景: 文章ID
+    "article_title": "文章标题",        // RSS场景: 文章标题
+    "feed_id": "feed_uuid"             // RSS场景: 订阅源ID
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "conv_xxx",
+    "model": "demo1",
+    "metadata": {                      // 返回metadata
+      "source": "rss",
+      "article_title": "文章标题..."
+    },
+    "created_at": "2026-02-24T14:00:00Z",
+    "updated_at": "2026-02-24T14:00:00Z"
+  }
+}
+```
+
+---
+
+#### 2.5.1.1 RSS文章对话场景
+
+**说明**: RSS页面创建对话时，自动附加文章上下文
+
+**创建流程**:
+1. 用户选中RSS文章
+2. 前端调用`POST /conversations`携带metadata
+3. 后端创建对话，metadata原样存储
+4. 前端自动发送第一条system message加载文章内容
+
+**System Message格式**:
+```json
+{
+  "role": "system",
+  "content": "你正在阅读一篇RSS文章。请基于以下内容回答用户问题。\n\n文章标题: {title}\n文章来源: {feed_name}\n发布时间: {published_at}\n\n文章内容:\n{content}"
+}
+```
+
+---
+
+#### 2.5.1.2 快捷操作Prompt设计
+
+**说明**: 快捷按钮（总结/翻译/关键点）通过标准对话接口实现
+
+| 快捷按钮 | Prompt模板 |
+|----------|-------------|
+| **总结** | `请用中文总结这篇文章的主要内容，不超过200字。` |
+| **翻译** | `请将这篇文章翻译成英文，保留原文格式和段落结构。` |
+| **关键点** | `请提取这篇文章的3-5个关键要点，用bullet points形式列出。` |
+
+**调用方式** (POST /proxy/ai/v1/chat/completions):
+```json
+{
+  "model": "demo1",
+  "conversation_id": "conv_xxx",
+  "messages": [
+    {"role": "system", "content": "文章内容..."},
+    {"role": "user", "content": "请帮我总结这篇文章"}
+  ],
+  "temperature": 0.7
+}
+```
+
+---
+
+#### 2.5.2 列表
 
 **GET** `/admin/ai/v1/conversations?model=demo1&start_time=xxx&end_time=xxx&limit=20&offset=0`
 

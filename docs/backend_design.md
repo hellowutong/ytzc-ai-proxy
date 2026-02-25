@@ -1117,7 +1117,109 @@ class ModelRouter:
 
 **职责**: 对话的创建、查询、保存、删除
 
-**类设计**:
+**类设计** (扩展支持metadata):
+
+```python
+# core/conversation_manager.py
+
+@dataclass
+class Conversation:
+    id: str
+    virtual_model: str
+    messages: List[Message]
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+    has_knowledge_reference: bool = False
+    metadata: Optional[Dict[str, Any]] = None  # 新增: 对话元数据
+
+@dataclass
+class Message:
+    role: str
+    content: str
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    metadata: Optional[Dict[str, Any]] = None  # 已有字段
+```
+
+**Metadata字段规范** (RSS场景):
+
+| 字段 | 类型 | 说明 | 示例值 |
+|------|------|------|--------|
+| `source` | str | 对话来源 | `"webchat"` / `"rss"` |
+| `title` | str | 对话标题 | `"文章标题"` / `"新对话"` |
+| `article_id` | str | RSS文章ID | `"uuid-string"` |
+| `article_title` | str | 文章标题 | `"少数派文章"` |
+| `feed_id` | str | 订阅源ID | `"feed-uuid"` |
+| `feed_name` | str | 订阅源名称 | `"少数派"` |
+
+**MongoDB存储结构**:
+
+```python
+{
+    "_id": "conv_uuid",
+    "virtual_model": "demo1",
+    "messages": [...],
+    "created_at": ISODate("..."),
+    "updated_at": ISODate("..."),
+    "message_count": 10,
+    "has_knowledge_reference": False,
+    "metadata": {                      # 新增字段
+        "source": "rss",
+        "title": "文章标题",
+        "article_id": "article_uuid",
+        "feed_id": "feed_uuid",
+        "feed_name": "少数派"
+    }
+}
+```
+
+**API实现修改**:
+
+```python
+# 创建对话 - 支持metadata
+async def create_conversation(
+    self, 
+    virtual_model: str, 
+    metadata: Optional[Dict] = None
+) -> Conversation:
+    conversation_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+    
+    doc = {
+        "_id": conversation_id,
+        "virtual_model": virtual_model,
+        "messages": [],
+        "created_at": now,
+        "updated_at": now,
+        "message_count": 0,
+        "has_knowledge_reference": False,
+    }
+    
+    # 新增: 存储metadata
+    if metadata:
+        doc["metadata"] = metadata
+    
+    await self.collection.insert_one(doc)
+    
+    return Conversation(..., metadata=metadata)
+
+# 查询对话列表 - 返回全部(包括RSS)
+async def list_conversations(self, limit: int = 20, offset: int = 0):
+    cursor = self.collection.find()
+    # ...不区分source,返回所有对话
+    conversations = []
+    async for doc in cursor:
+        conversations.append(Conversation(
+            ...,
+            metadata=doc.get("metadata")  # 返回metadata
+        ))
+    return conversations
+```
+
+**重要说明**:
+- 列表查询**不区分来源**，返回所有对话(WebChat自动显示RSS对话)
+- RSS页面通过前端筛选`metadata.article_id`获取特定文章对话
+- 原有WebChat功能**100%保持兼容**，metadata为可选字段
 
 ---
 
